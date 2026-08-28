@@ -1,0 +1,17 @@
+# Packaged copies
+*.zip
+
+# Runtime state (do not commit a live desktop snapshot)
+snapshot.json
+config.json
+capture-wallpaper.bak
+capture-solid.bmp
+iconlayout.reg
+elevate-request.json
+elevate-result.json
+error.log
+install-error.log
+Profiles/
+
+# Built at install time
+DesktopIconToggle.exe
