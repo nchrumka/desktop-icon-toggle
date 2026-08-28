@@ -124,7 +124,7 @@ $toastKey   = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Set
 $bagKey           = 'HKCU\Software\Microsoft\Windows\Shell\Bags\1\Desktop'
 $lookBackupPath   = Join-Path $root 'capture-wallpaper.bak'
 $lookSolidPath    = Join-Path $root 'capture-solid.bmp'
-$appVersion       = '1.4.2'
+$appVersion       = '1.4.3'
 $script:hideBtn   = $null
 $script:controlForm = $null
 $script:countdownLeft = 0
@@ -633,7 +633,7 @@ function Invoke-ElevatedHiddenChange([string[]]$paths, [bool]$hidden) {
     $paths | Set-Content -Path $listFile -Encoding UTF8
     $flag = if ($hidden) { '-SetHidden' } else { '-SetVisible' }
     try {
-        $arg = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$manager`" -RegisterHelper $flag -ListFile `"$listFile`""
+        $arg = "-NoProfile -ExecutionPolicy RemoteSigned -File `"$manager`" -RegisterHelper $flag -ListFile `"$listFile`""
         $proc = Start-Process -FilePath 'powershell.exe' -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ArgumentList $arg
         return ($null -ne $proc -and $proc.ExitCode -eq 0)
     } catch {

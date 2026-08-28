@@ -16,7 +16,7 @@ Write-Host "Uninstalling Desktop Icon Toggle..." -ForegroundColor Cyan
 # BEFORE removing anything, so nobody ends up with icons missing permanently.
 if ((Test-Path $snapshotPath) -and (Test-Path $cliPath)) {
     Write-Host "Your desktop has been customized - restoring your original icons first..." -ForegroundColor Yellow
-    & powershell -ExecutionPolicy Bypass -File $cliPath -Restore -Silent
+    & powershell -ExecutionPolicy RemoteSigned -File $cliPath -Restore -Silent
 }
 
 # Stop the running tray icon so it doesn't linger after its files are gone.

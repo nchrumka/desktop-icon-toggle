@@ -57,43 +57,17 @@ if (Test-Path $icoHiddenSrc) {
     Copy-Item -Path $icoHiddenSrc -Destination $icoHiddenDest -Force
 }
 
+$exeSrc  = Join-Path $PSScriptRoot 'DesktopIconToggle.exe'
 $exeDest = Join-Path $installDir 'DesktopIconToggle.exe'
-$csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-$launcherSrc = Join-Path $PSScriptRoot 'Launcher.cs'
-$builtExe = $false
-if ((Test-Path $csc) -and (Test-Path $launcherSrc)) {
-    $wf = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\System.Windows.Forms.dll'
-    $manifest = Join-Path $PSScriptRoot 'app.manifest'
-    $cscArgs = New-Object System.Collections.Generic.List[string]
-    [void]$cscArgs.Add('/nologo')
-    [void]$cscArgs.Add('/target:winexe')
-    [void]$cscArgs.Add('/optimize+')
-    [void]$cscArgs.Add("/r:$wf")
-    [void]$cscArgs.Add("/out:$exeDest")
-    if (Test-Path $manifest) { [void]$cscArgs.Add("/win32manifest:$manifest") }
-    if (Test-Path $icoDest) { [void]$cscArgs.Add("/win32icon:$icoDest") }
-    foreach ($resName in @('DesktopIconTray.ps1','DesktopIconManager.ps1','Uninstall.ps1','App.ico','App-Hidden.ico','Run-Hidden.vbs')) {
-        $resPath = Join-Path $PSScriptRoot $resName
-        if (Test-Path $resPath) { [void]$cscArgs.Add("/resource:$resPath,$resName") }
-    }
-    [void]$cscArgs.Add($launcherSrc)
-    & $csc @($cscArgs.ToArray())
-    if ($LASTEXITCODE -eq 0 -and (Test-Path $exeDest)) {
-        $builtExe = $true
-        Write-Host "Built DesktopIconToggle.exe" -ForegroundColor DarkGreen
-        try {
-            $cert = Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert -ErrorAction SilentlyContinue |
-                Where-Object { $_.Subject -eq 'CN=Desktop Icon Toggle' } |
-                Select-Object -First 1
-            if (-not $cert) {
-                $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=Desktop Icon Toggle' -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date).AddYears(5)
-            }
-            $sig = Set-AuthenticodeSignature -FilePath $exeDest -Certificate $cert -ErrorAction Stop
-            Write-Host "Signed exe: $($sig.Status)" -ForegroundColor DarkGreen
-        } catch {
-            Write-Host "(Could not sign the exe: $($_.Exception.Message))" -ForegroundColor DarkYellow
-        }
-    }
+if (-not (Test-Path $exeSrc)) {
+    throw "DesktopIconToggle.exe was not found next to Install.ps1. Use the zip from GitHub Releases (not a lone source checkout without the exe)."
+}
+Copy-Item -Path $exeSrc -Destination $exeDest -Force
+$builtExe = $true
+Write-Host "Copied DesktopIconToggle.exe (not compiled on this PC)." -ForegroundColor DarkGreen
+
+Get-ChildItem -LiteralPath $installDir -File -ErrorAction SilentlyContinue | ForEach-Object {
+    try { Unblock-File -LiteralPath $_.FullName -ErrorAction Stop } catch {}
 }
 
 function Write-HiddenLauncher([string]$vbsPath, [string]$psCommand) {
@@ -106,9 +80,9 @@ CreateObject("WScript.Shell").Run "$escaped", 0, False
 $launchWindow = Join-Path $installDir 'Launch-Window.vbs'
 $launchTray   = Join-Path $installDir 'Launch-Tray.vbs'
 $launchReset  = Join-Path $installDir 'Launch-Reset.vbs'
-Write-HiddenLauncher $launchWindow "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$trayDest`" -ShowUi"
-Write-HiddenLauncher $launchTray   "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$trayDest`""
-Write-HiddenLauncher $launchReset  "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$cliDest`" -Reset"
+Write-HiddenLauncher $launchWindow "powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File `"$trayDest`" -ShowUi"
+Write-HiddenLauncher $launchTray   "powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File `"$trayDest`""
+Write-HiddenLauncher $launchReset  "powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File `"$cliDest`" -Reset"
 
 if (-not (Test-Path $trayDest)) {
     throw "Copy appeared to succeed but $trayDest still doesn't exist. Check antivirus/permissions on $installDir."
@@ -168,7 +142,7 @@ Write-Host "Created Start menu shortcut. Restore Desktop Icons remains on the de
 $uninstKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\DesktopIconToggle'
 New-Item -Path $uninstKey -Force | Out-Null
 Set-ItemProperty $uninstKey -Name DisplayName -Value 'Desktop Icon Toggle'
-Set-ItemProperty $uninstKey -Name DisplayVersion -Value '1.4.2'
+Set-ItemProperty $uninstKey -Name DisplayVersion -Value '1.4.3'
 Set-ItemProperty $uninstKey -Name Publisher -Value 'Desktop Icon Toggle'
 Set-ItemProperty $uninstKey -Name InstallLocation -Value $installDir
 Set-ItemProperty $uninstKey -Name NoModify -Value 1 -Type DWord
@@ -178,7 +152,7 @@ if ($builtExe) {
     Set-ItemProperty $uninstKey -Name UninstallString -Value "`"$exeDest`" -Uninstall"
 } else {
     Set-ItemProperty $uninstKey -Name DisplayIcon -Value $icoDest
-    Set-ItemProperty $uninstKey -Name UninstallString -Value "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $installDir 'Uninstall.ps1')`""
+    Set-ItemProperty $uninstKey -Name UninstallString -Value "powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File `"$(Join-Path $installDir 'Uninstall.ps1')`""
 }
 Write-Host "Registered in Settings > Apps." -ForegroundColor DarkGreen
 

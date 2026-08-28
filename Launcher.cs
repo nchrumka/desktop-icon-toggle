@@ -36,7 +36,7 @@ internal static class Program
             if (!File.Exists(tray))
             {
                 MessageBox.Show(
-                    "DesktopIconTray.ps1 could not be unpacked. Download DesktopIconToggle-1.4.2.zip from GitHub Releases and run Install.bat.",
+                    "DesktopIconTray.ps1 could not be unpacked. Download DesktopIconToggle-1.4.3.zip from GitHub Releases and run Install.bat.",
                     "Desktop Icon Toggle",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
@@ -71,17 +71,17 @@ internal static class Program
                 MessageBox.Show("Uninstall.ps1 was not found.", "Desktop Icon Toggle", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return 1;
             }
-            return StartHidden(powershell, "-NoProfile -ExecutionPolicy Bypass -File \"" + uninstall + "\" -Silent", dir);
+            return StartHidden(powershell, "-NoProfile -ExecutionPolicy RemoteSigned -File \"" + uninstall + "\" -Silent", dir);
         }
 
         if (reset)
         {
             if (!File.Exists(manager)) return 1;
-            return StartHidden(powershell, "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" + manager + "\" -Reset", dir);
+            return StartHidden(powershell, "-NoProfile -ExecutionPolicy RemoteSigned -File \"" + manager + "\" -Reset", dir);
         }
 
         string extra = showUi ? " -ShowUi" : "";
-        return StartHidden(powershell, "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" + tray + "\"" + extra, dir);
+        return StartHidden(powershell, "-NoProfile -ExecutionPolicy RemoteSigned -File \"" + tray + "\"" + extra, dir);
     }
 
     private static string UnpackOrFail(string[] args)
@@ -90,7 +90,7 @@ internal static class Program
         {
             MessageBox.Show(
                 "DesktopIconTray.ps1 was not found next to this program, and this copy of DesktopIconToggle.exe does not include the app files.\n\n" +
-                "Download DesktopIconToggle-1.4.2.zip from GitHub Releases and run Install.bat:\n" +
+                "Download DesktopIconToggle-1.4.3.zip from GitHub Releases and run Install.bat:\n" +
                 "https://github.com/nchrumka/desktop-icon-toggle/releases/latest",
                 "Desktop Icon Toggle",
                 MessageBoxButtons.OK,
@@ -168,6 +168,7 @@ internal static class Program
                     while ((n = s.Read(buf, 0, buf.Length)) > 0)
                         fs.Write(buf, 0, n);
                 }
+                try { File.Delete(dest + ":Zone.Identifier"); } catch { }
             }
         }
     }
