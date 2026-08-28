@@ -6,10 +6,11 @@ Hide desktop icons for a clean screenshot or recording, then bring everything ba
 
 ## 1. Install
 
-1. Unzip the folder (or clone the repository) so `Install.bat` sits next to the scripts, not inside the zip.
-2. Double-click **Install.bat**.
-3. If SmartScreen says **Windows protected your PC**, choose **More info**, then **Run anyway**. The launcher is signed with a local certificate; SmartScreen may still warn the first time.
-4. A **Desktop Icon Toggle** window should open.
+1. Download **[DesktopIconToggle-1.4.1.zip](https://github.com/nchrumka/desktop-icon-toggle/raw/main/DesktopIconToggle-1.4.1.zip)** from GitHub.
+2. Unzip the folder so `Install.bat` sits next to the scripts, not inside the zip.
+3. Double-click **Install.bat**.
+4. If SmartScreen says **Windows protected your PC**, choose **More info**, then **Run anyway**. The launcher is signed with a local certificate; SmartScreen may still warn the first time.
+5. A **Desktop Icon Toggle** window should open.
 
 You do **not** need administrator rights for your own Desktop (including a OneDrive Desktop). The first time a **Public Desktop** icon cannot be hidden, Windows may ask for elevation once. After that, a scheduled task named `DesktopIconToggleHelper` can finish those items without another prompt.
 
