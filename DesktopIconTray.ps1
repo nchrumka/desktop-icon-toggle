@@ -7,7 +7,9 @@
 #>
 
 param(
-    [switch]$ShowUi
+    [switch]$ShowUi,
+    [switch]$Stop,
+    [switch]$Hide
 )
 
 Add-Type -Name NativeBoot -Namespace DesktopIconToggle -MemberDefinition @"
@@ -89,11 +91,23 @@ namespace DesktopIconToggle {
 
 $script:SingleInstance = New-Object System.Threading.Mutex($false, 'Local\DesktopIconToggle')
 if (-not $script:SingleInstance.WaitOne(0)) {
-    [System.Windows.Forms.MessageBox]::Show(
-        "Desktop Icon Toggle is already running.`n`nPress your hide/restore shortcut, look next to the clock (click ^), or Start menu > Desktop Icon Toggle.",
-        'Desktop Icon Toggle', 'OK', 'Information') | Out-Null
+    $evtName = if ($Stop) { 'Local\DesktopIconToggle.Stop' } elseif ($Hide) { 'Local\DesktopIconToggle.Hide' } else { 'Local\DesktopIconToggle.ShowUi' }
+    try {
+        $ev = [System.Threading.EventWaitHandle]::OpenExisting($evtName)
+        [void]$ev.Set()
+    } catch {
+        try {
+            Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
+            [System.Windows.Forms.MessageBox]::Show(
+                "Desktop Icon Toggle is already running.`n`nPress Win+Shift+D to restore, or end Windows PowerShell in Task Manager if it is stuck.",
+                'Desktop Icon Toggle', 'OK', 'Information') | Out-Null
+        } catch {}
+    }
     exit 0
 }
+$script:evtShow = New-Object System.Threading.EventWaitHandle($false, [System.Threading.EventResetMode]::AutoReset, 'Local\DesktopIconToggle.ShowUi')
+$script:evtStop = New-Object System.Threading.EventWaitHandle($false, [System.Threading.EventResetMode]::AutoReset, 'Local\DesktopIconToggle.Stop')
+$script:evtHide = New-Object System.Threading.EventWaitHandle($false, [System.Threading.EventResetMode]::AutoReset, 'Local\DesktopIconToggle.Hide')
 
 [System.Windows.Forms.Application]::SetUnhandledExceptionMode([System.Windows.Forms.UnhandledExceptionMode]::CatchException)
 $threadExceptionHandler = {
@@ -127,11 +141,14 @@ $toastKey   = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Set
 $bagKey           = 'HKCU\Software\Microsoft\Windows\Shell\Bags\1\Desktop'
 $lookBackupPath   = Join-Path $root 'capture-wallpaper.bak'
 $lookSolidPath    = Join-Path $root 'capture-solid.bmp'
-$appVersion       = '1.4.6'
+$appVersion       = '1.5.0'
 $script:hideBtn   = $null
 $script:controlForm = $null
 $script:countdownLeft = 0
 $script:hotkeysBusy = $false
+$script:keepOverlayForms = @()
+$script:keepIcons = @()
+$script:keepPaintIcons = @()
 
 New-Item -ItemType Directory -Path $profilesDir -Force | Out-Null
 
@@ -251,6 +268,65 @@ public static extern System.IntPtr FindWindow(string lpClassName, string lpWindo
 public static extern System.IntPtr FindWindowEx(System.IntPtr hwndParent, System.IntPtr hwndChildAfter, string lpszClass, string lpszWindow);
 [System.Runtime.InteropServices.DllImport("user32.dll")]
 public static extern System.IntPtr SendMessage(System.IntPtr hWnd, uint Msg, System.IntPtr wParam, System.IntPtr lParam);
+[System.Runtime.InteropServices.DllImport("user32.dll")]
+public static extern bool ShowWindow(System.IntPtr hWnd, int nCmdShow);
+[System.Runtime.InteropServices.DllImport("user32.dll")]
+public static extern bool IsWindowVisible(System.IntPtr hWnd);
+[System.Runtime.InteropServices.DllImport("user32.dll")]
+public static extern bool InvalidateRect(System.IntPtr hWnd, System.IntPtr lpRect, bool bErase);
+[System.Runtime.InteropServices.DllImport("user32.dll")]
+public static extern bool RedrawWindow(System.IntPtr hWnd, System.IntPtr lprc, System.IntPtr hrgn, uint flags);
+[System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+public static extern bool SetWindowPos(System.IntPtr hWnd, System.IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+[System.Runtime.InteropServices.DllImport("user32.dll")]
+public static extern int GetSystemMetrics(int nIndex);
+"@
+$drAsm = [System.Drawing.Icon].Assembly.Location
+Add-Type -ReferencedAssemblies $wfAsm, $drAsm -TypeDefinition @"
+using System;
+using System.Drawing;
+using System.Runtime.InteropServices;
+using System.Windows.Forms;
+
+namespace DesktopIconToggle {
+    public class DesktopLayerForm : Form {
+        protected override bool ShowWithoutActivation { get { return true; } }
+        protected override CreateParams CreateParams {
+            get {
+                CreateParams cp = base.CreateParams;
+                cp.ExStyle |= 0x00000080;
+                cp.ExStyle |= 0x08000000;
+                return cp;
+            }
+        }
+    }
+    public static class ShellIcon {
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+        private struct SHFILEINFO {
+            public IntPtr hIcon;
+            public int iIcon;
+            public uint dwAttributes;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)] public string szDisplayName;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 80)] public string szTypeName;
+        }
+        [DllImport("shell32.dll", CharSet = CharSet.Auto)]
+        private static extern IntPtr SHGetFileInfo(string pszPath, uint attr, ref SHFILEINFO fi, uint size, uint flags);
+        [DllImport("user32.dll")]
+        private static extern bool DestroyIcon(IntPtr hIcon);
+        public static Icon Get(string path) {
+            SHFILEINFO fi = new SHFILEINFO();
+            SHGetFileInfo(path, 0, ref fi, (uint)Marshal.SizeOf(typeof(SHFILEINFO)), 0x100);
+            if (fi.hIcon == IntPtr.Zero) return null;
+            Icon clone = (Icon)Icon.FromHandle(fi.hIcon).Clone();
+            DestroyIcon(fi.hIcon);
+            return clone;
+        }
+    }
+}
+"@
+Add-Type -Namespace Win32 -Name NativePath -MemberDefinition @"
+[System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+public static extern void SHChangeNotify(int wEventId, int uFlags, string dwItem1, string dwItem2);
 "@
 Add-Type -Namespace Win32 -Name DesktopLook -MemberDefinition @"
 [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
@@ -338,40 +414,381 @@ function Get-ExplorerHideIcons {
     }
 }
 
-function Invoke-DesktopIconViewToggle {
+function Get-DesktopDefViewWindows {
     $zero = [IntPtr]::Zero
-    $cmd = [uint32]0x0111
-    $id = [IntPtr]0x7402
-    $windows = New-Object System.Collections.Generic.List[IntPtr]
+    $found = New-Object System.Collections.Generic.List[IntPtr]
+    $titles = @([NullString]::Value, '', $null)
     try {
-        $progman = [Win32.DesktopIcons]::FindWindow('Progman', $null)
+        $progman = [Win32.DesktopIcons]::FindWindow('Progman', 'Program Manager')
         if ($progman -ne $zero) {
-            $def = [Win32.DesktopIcons]::FindWindowEx($progman, $zero, 'SHELLDLL_DefView', $null)
-            if ($def -ne $zero) { [void]$windows.Add($def) }
+            foreach ($t in $titles) {
+                $def = [Win32.DesktopIcons]::FindWindowEx($progman, $zero, 'SHELLDLL_DefView', $t)
+                if ($def -ne $zero) { [void]$found.Add($def); break }
+            }
         }
         $worker = $zero
         for ($i = 0; $i -lt 24; $i++) {
-            $worker = [Win32.DesktopIcons]::FindWindowEx($zero, $worker, 'WorkerW', $null)
+            $worker = [Win32.DesktopIcons]::FindWindowEx($zero, $worker, 'WorkerW', [NullString]::Value)
             if ($worker -eq $zero) { break }
-            $def = [Win32.DesktopIcons]::FindWindowEx($worker, $zero, 'SHELLDLL_DefView', $null)
-            if ($def -ne $zero) { [void]$windows.Add($def) }
+            foreach ($t in $titles) {
+                $def = [Win32.DesktopIcons]::FindWindowEx($worker, $zero, 'SHELLDLL_DefView', $t)
+                if ($def -ne $zero) { [void]$found.Add($def); break }
+            }
         }
-        foreach ($hwnd in $windows) {
-            [void][Win32.DesktopIcons]::SendMessage($hwnd, $cmd, $id, $zero)
+    } catch {}
+    return @($found)
+}
+
+function Set-DesktopIconListVisible([bool]$visible) {
+    $cmd = if ($visible) { 9 } else { 0 }
+    $zero = [IntPtr]::Zero
+    foreach ($def in (Get-DesktopDefViewWindows)) {
+        $list = [Win32.DesktopIcons]::FindWindowEx($def, $zero, 'SysListView32', 'FolderView')
+        if ($list -eq $zero) {
+            $list = [Win32.DesktopIcons]::FindWindowEx($def, $zero, 'SysListView32', [NullString]::Value)
         }
+        if ($list -ne $zero) {
+            [void][Win32.DesktopIcons]::ShowWindow($list, $cmd)
+            if ($visible) {
+                try { [void][Win32.DesktopIcons]::InvalidateRect($list, $zero, $true) } catch {}
+                try { [void][Win32.DesktopIcons]::RedrawWindow($list, $zero, $zero, 0x0185) } catch {}
+                try { [void][Win32.DesktopIcons]::SendMessage($list, [uint32]0x1015, [IntPtr]::Zero, [IntPtr](-1)) } catch {}
+            }
+        }
+    }
+}
+
+function Get-DesktopListViewHwnds {
+    $zero = [IntPtr]::Zero
+    $hwnds = @()
+    foreach ($def in (Get-DesktopDefViewWindows)) {
+        $list = [Win32.DesktopIcons]::FindWindowEx($def, $zero, 'SysListView32', 'FolderView')
+        if ($list -eq $zero) {
+            $list = [Win32.DesktopIcons]::FindWindowEx($def, $zero, 'SysListView32', [NullString]::Value)
+        }
+        if ($list -ne $zero) { $hwnds += $list }
+    }
+    return @($hwnds)
+}
+
+function Get-DesktopIconScreenRects {
+    $map = @{}
+    try {
+        Add-Type -AssemblyName UIAutomationClient -ErrorAction Stop
+        Add-Type -AssemblyName UIAutomationTypes -ErrorAction Stop
+    } catch { return $map }
+    foreach ($hwnd in (Get-DesktopListViewHwnds)) {
+        try {
+            $el = [System.Windows.Automation.AutomationElement]::FromHandle($hwnd)
+            if (-not $el) { continue }
+            $cond = New-Object System.Windows.Automation.PropertyCondition(
+                [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+                [System.Windows.Automation.ControlType]::ListItem)
+            $found = $el.FindAll([System.Windows.Automation.TreeScope]::Children, $cond)
+            foreach ($it in $found) {
+                try {
+                    $n = [string]$it.Current.Name
+                    $r = $it.Current.BoundingRectangle
+                    if ($n -and $r.Width -gt 0 -and $r.Height -gt 0) { $map[$n] = $r }
+                } catch {}
+            }
+        } catch {}
+    }
+    return $map
+}
+
+function Get-KeepIconSpacing {
+    $cx = 76
+    $cy = 88
+    try {
+        $sx = [Win32.DesktopIcons]::GetSystemMetrics(88)
+        $sy = [Win32.DesktopIcons]::GetSystemMetrics(89)
+        if ($sx -ge 48) { $cx = $sx }
+        if ($sy -ge 48) { $cy = $sy }
+    } catch {}
+    return @{ W = $cx; H = $cy }
+}
+
+function Find-KeepIconRect($item, $uiaMap, $fallbackIndex, $cell) {
+    if ($uiaMap -and $uiaMap.Count -gt 0) {
+        foreach ($key in @($item.Name, $item.BaseName)) {
+            if ($key -and $uiaMap.ContainsKey($key)) { return $uiaMap[$key] }
+        }
+        $base = [IO.Path]::GetFileNameWithoutExtension($item.Name)
+        foreach ($k in @($uiaMap.Keys)) {
+            if ($k -eq $item.Name -or $k -eq $item.BaseName -or $k -eq $base) { return $uiaMap[$k] }
+        }
+    }
+    $work = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+    $cols = [Math]::Max(1, [int][Math]::Floor($work.Width / $cell.W))
+    $col = $fallbackIndex % $cols
+    $row = [Math]::Floor($fallbackIndex / $cols)
+    return [PSCustomObject]@{
+        X = $work.Left + ($col * $cell.W)
+        Y = $work.Top + ($row * $cell.H)
+        Width = $cell.W
+        Height = $cell.H
+    }
+}
+
+function Send-KeepIconOverlayToBack {
+    $bottom = [IntPtr]1
+    foreach ($form in @($script:keepOverlayForms)) {
+        if ($form -and -not $form.IsDisposed) {
+            try {
+                [void][Win32.DesktopIcons]::SetWindowPos($form.Handle, $bottom, 0, 0, 0, 0, 0x0013)
+            } catch {}
+        }
+    }
+}
+
+function Close-KeepIconOverlay {
+    foreach ($form in @($script:keepOverlayForms)) {
+        try {
+            if ($form -and -not $form.IsDisposed) {
+                $form.Close()
+                $form.Dispose()
+            }
+        } catch {}
+    }
+    $script:keepOverlayForms = @()
+    foreach ($ic in @($script:keepIcons)) {
+        try { $ic.Dispose() } catch {}
+    }
+    $script:keepIcons = @()
+    $script:keepPaintIcons = @()
+}
+
+function Show-KeepIconOverlay {
+    param(
+        [string[]]$visibleNames,
+        $uiaMap = $null
+    )
+    Close-KeepIconOverlay
+    $wanted = @($visibleNames | Where-Object { $_ })
+    if ($wanted.Count -eq 0) { return }
+    $items = @()
+    foreach ($item in (Get-DesktopItems)) {
+        if ($item.Name -in $wanted) { $items += $item }
+    }
+    if ($items.Count -eq 0) { return }
+    $cell = Get-KeepIconSpacing
+    if ($null -eq $uiaMap) { $uiaMap = Get-DesktopIconScreenRects }
+    $font = New-Object System.Drawing.Font('Segoe UI', 9)
+    $magenta = [System.Drawing.Color]::Magenta
+    $i = 0
+    foreach ($item in $items) {
+        $path = $item.FullName
+        $label = $item.Name
+        try {
+            if ((Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' -Name HideFileExt -ErrorAction Stop).HideFileExt -eq 1) {
+                if ($item.Extension -and $item.Extension -ne '.lnk') { $label = $item.BaseName }
+            }
+        } catch {}
+        $rect = Find-KeepIconRect $item $uiaMap $i $cell
+        $i++
+        $icon = $null
+        try { $icon = [DesktopIconToggle.ShellIcon]::Get($path) } catch {}
+        if (-not $icon) {
+            try { $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($path) } catch {}
+        }
+        if ($icon) { $script:keepIcons += $icon }
+        $form = New-Object DesktopIconToggle.DesktopLayerForm
+        $form.FormBorderStyle = 'None'
+        $form.ShowInTaskbar = $false
+        $form.StartPosition = 'Manual'
+        $form.TopMost = $false
+        $form.BackColor = $magenta
+        $form.TransparencyKey = $magenta
+        $form.Cursor = [System.Windows.Forms.Cursors]::Hand
+        $w = [Math]::Max([int]$rect.Width, $cell.W)
+        $h = [Math]::Max([int]$rect.Height, $cell.H)
+        $form.Location = New-Object System.Drawing.Point([int]$rect.X, [int]$rect.Y)
+        $form.Size = New-Object System.Drawing.Size($w, $h)
+        $form.Tag = $path
+        $form.Font = $font
+        $form.Add_Paint({
+            param($s, $e)
+            $g = $e.Graphics
+            $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::ClearTypeGridFit
+            $filePath = [string]$s.Tag
+            $ic = $null
+            $caption = ''
+            foreach ($pair in @($script:keepPaintIcons)) {
+                if ($pair.Path -eq $filePath) { $ic = $pair.Icon; $caption = $pair.Label; break }
+            }
+            $iconBox = 32
+            if ($ic) {
+                $ix = [int](($s.ClientSize.Width - $iconBox) / 2)
+                $g.DrawIcon($ic, (New-Object System.Drawing.Rectangle($ix, 4, $iconBox, $iconBox)))
+            }
+            $textRect = New-Object System.Drawing.RectangleF(2, 40, ($s.ClientSize.Width - 4), ($s.ClientSize.Height - 42))
+            $sf = New-Object System.Drawing.StringFormat
+            $sf.Alignment = [System.Drawing.StringAlignment]::Center
+            $sf.LineAlignment = [System.Drawing.StringAlignment]::Near
+            $sf.Trimming = [System.Drawing.StringTrimming]::EllipsisCharacter
+            $sf.FormatFlags = [System.Drawing.StringFormatFlags]::LineLimit
+            $font2 = $s.Font
+            foreach ($ox in @(-1, 0, 1)) {
+                foreach ($oy in @(-1, 0, 1)) {
+                    if ($ox -eq 0 -and $oy -eq 0) { continue }
+                    $g.DrawString($caption, $font2, [System.Drawing.Brushes]::Black, (New-Object System.Drawing.RectangleF(($textRect.X + $ox), ($textRect.Y + $oy), $textRect.Width, $textRect.Height)), $sf)
+                }
+            }
+            $g.DrawString($caption, $font2, [System.Drawing.Brushes]::White, $textRect, $sf)
+        })
+        $form.Add_MouseDoubleClick({
+            param($s, $e)
+            try { Start-Process -LiteralPath ([string]$s.Tag) } catch {
+                try { Invoke-Item -LiteralPath ([string]$s.Tag) } catch {}
+            }
+        })
+        $script:keepPaintIcons += [PSCustomObject]@{ Path = $path; Icon = $icon; Label = $label }
+        $form.Show()
+        $script:keepOverlayForms += $form
+    }
+    Send-KeepIconOverlayToBack
+}
+
+function Test-KeepIconOverlayAlive {
+    foreach ($form in @($script:keepOverlayForms)) {
+        if ($form -and -not $form.IsDisposed) { return $true }
+    }
+    return $false
+}
+
+function Rebuild-ExplorerIconCache {
+    try { & (Join-Path $env:SystemRoot 'System32\ie4uinit.exe') -show | Out-Null } catch {}
+    Get-Process -Name explorer -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 800
+    $cache = Join-Path $env:LOCALAPPDATA 'IconCache.db'
+    $expDir = Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Explorer'
+    Remove-Item -LiteralPath $cache -Force -ErrorAction SilentlyContinue
+    Get-ChildItem -LiteralPath $expDir -Filter 'iconcache*' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+    Get-ChildItem -LiteralPath $expDir -Filter 'thumbcache*' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 400
+    if (-not (Get-Process -Name explorer -ErrorAction SilentlyContinue)) {
+        Start-Process (Join-Path $env:SystemRoot 'explorer.exe')
+    }
+    Start-Sleep -Milliseconds 800
+    try { Set-DesktopIconListVisible $true } catch {}
+}
+
+function Refresh-DesktopIconView {
+    try { Set-ExplorerHideIcons 0 } catch {}
+    try { Set-DesktopIconListVisible $true } catch {}
+    foreach ($folder in (Get-DesktopPaths)) {
+        try { [Win32.NativePath]::SHChangeNotify(0x00001000, 0x0005, $folder, $null) } catch {}
+    }
+    Refresh-Desktop
+    Rebuild-ExplorerIconCache
+}
+
+function Get-ExplorerShowHidden {
+    try {
+        return [int](Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' -Name Hidden -ErrorAction Stop).Hidden
+    } catch {
+        return 2
+    }
+}
+
+function Set-ExplorerShowHidden([int]$mode) {
+    $val = if ($mode -eq 1) { 1 } else { 2 }
+    $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
+    try {
+        if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null }
+        New-ItemProperty -Path $key -Name Hidden -PropertyType DWord -Value $val -Force | Out-Null
     } catch {}
 }
 
 function Set-ExplorerHideIcons([int]$hide) {
     $want = if ($hide) { 1 } else { 0 }
-    $now = Get-ExplorerHideIcons
     $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
     try {
         if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null }
         New-ItemProperty -Path $key -Name HideIcons -PropertyType DWord -Value $want -Force | Out-Null
     } catch {}
-    if ($now -ne $want) { Invoke-DesktopIconViewToggle }
-    Refresh-Desktop
+    Set-DesktopIconListVisible ($want -eq 0)
+}
+
+function Get-HiddenTargetItems($snapshot) {
+    $protect = Get-ProtectedNames
+    $visible = @()
+    if ($snapshot -and $null -ne $snapshot.VisibleNames) {
+        $visible = @($snapshot.VisibleNames | ForEach-Object { [string]$_ })
+    }
+    $hideAll = -not ($snapshot -and $null -ne $snapshot.VisibleNames)
+    foreach ($item in (Get-DesktopItems)) {
+        if ($item.Name -eq 'desktop.ini') { continue }
+        if ($item.Name -in $protect) { continue }
+        if ($hideAll) { $item; continue }
+        if ($item.Name -notin $visible) { $item }
+    }
+}
+
+function Assert-DesktopIconsHidden {
+    if (-not (Test-Path $snapshotPath)) { return }
+    try { Set-DesktopIconListVisible $false } catch {}
+    try {
+        $snap = Read-Snapshot
+        $keep = @()
+        if ($snap -and $null -ne $snap.VisibleNames) {
+            $keep = @($snap.VisibleNames | ForEach-Object { [string]$_ } | Where-Object { $_ })
+        }
+        if ($keep.Count -gt 0) {
+            if (Test-KeepIconOverlayAlive) { Send-KeepIconOverlayToBack }
+            else { Show-KeepIconOverlay $keep }
+        }
+    } catch {}
+}
+
+function Start-HideAssertTimer {
+    Stop-HideAssertTimer
+    if (-not $script:hideAssertTimer) {
+        $script:hideAssertTimer = New-Object System.Windows.Forms.Timer
+        $script:hideAssertTimer.Interval = 750
+        $script:hideAssertTimer.Add_Tick({
+            if (Test-DesktopHidden) { Assert-DesktopIconsHidden }
+            else { Stop-HideAssertTimer }
+        })
+    }
+    $script:hideAssertTimer.Start()
+}
+
+function Stop-HideAssertTimer {
+    if ($script:hideAssertTimer) { $script:hideAssertTimer.Stop() }
+}
+
+function Invoke-AppStop {
+    try {
+        Stop-HideAssertTimer
+        Stop-Countdown
+        Stop-AutoRestore
+        if (Test-DesktopHidden) { Restore-Original }
+    } catch {}
+    try {
+        if ($notifyIcon) {
+            $notifyIcon.Visible = $false
+            $notifyIcon.Dispose()
+        }
+        if ($script:hotKeyWindow) { $script:hotKeyWindow.Dispose() }
+    } catch {}
+    [System.Windows.Forms.Application]::Exit()
+}
+
+function Start-IpcTimer {
+    if ($script:ipcTimer) { return }
+    $script:ipcTimer = New-Object System.Windows.Forms.Timer
+    $script:ipcTimer.Interval = 300
+    $script:ipcTimer.Add_Tick({
+        try {
+            if ($script:evtShow -and $script:evtShow.WaitOne(0)) { Show-ControlWindow }
+            if ($script:evtHide -and $script:evtHide.WaitOne(0)) { Invoke-HideNow $false }
+            if ($script:evtStop -and $script:evtStop.WaitOne(0)) { Invoke-AppStop }
+            if ($notifyIcon) { $notifyIcon.Visible = $true }
+        } catch {}
+    })
+    $script:ipcTimer.Start()
 }
 
 function Get-IconFromFile([string]$name) {
@@ -600,10 +1017,10 @@ function Read-Snapshot {
     if (-not (Test-Path $snapshotPath)) { return $null }
     $raw = Get-Content $snapshotPath -Raw | ConvertFrom-Json
     if ($raw.PSObject.Properties.Name -contains 'Items') { return $raw }
-    return [PSCustomObject]@{ Items = @($raw); SystemIcons = $null; ToastsEnabled = $null; CaptureLook = $null; TaskbarAppBarState = $null; ExplorerHideIcons = $null }
+    return [PSCustomObject]@{ Items = @($raw); SystemIcons = $null; ToastsEnabled = $null; CaptureLook = $null; TaskbarAppBarState = $null; ExplorerHideIcons = $null; ExplorerShowHidden = $null; VisibleNames = $null }
 }
 
-function Write-Snapshot($items, $sys, $toasts, $look, $taskbarState) {
+function Write-Snapshot($items, $sys, $toasts, $look, $taskbarState, $visibleNames) {
     [PSCustomObject]@{
         Items = @($items)
         SystemIcons = $sys
@@ -611,19 +1028,28 @@ function Write-Snapshot($items, $sys, $toasts, $look, $taskbarState) {
         CaptureLook = $look
         TaskbarAppBarState = $taskbarState
         ExplorerHideIcons = Get-ExplorerHideIcons
+        ExplorerShowHidden = Get-ExplorerShowHidden
+        VisibleNames = $visibleNames
     } | ConvertTo-Json -Depth 6 | Set-Content -Path $snapshotPath -Encoding UTF8
+}
+
+function Update-SnapshotVisibleNames($visibleNames) {
+    $snap = Read-Snapshot
+    if (-not $snap) { return }
+    $snap | Add-Member -NotePropertyName VisibleNames -NotePropertyValue @($visibleNames) -Force
+    $snap | ConvertTo-Json -Depth 6 | Set-Content -Path $snapshotPath -Encoding UTF8
 }
 
 function Test-DesktopHidden { Test-Path $snapshotPath }
 
-function Ensure-Baseline($look, $taskbarState) {
+function Ensure-Baseline($look, $taskbarState, $visibleNames) {
     if (Test-Path $snapshotPath) { return }
     $cfg = Get-ToolConfig
     if ($cfg.PreservePositions) { Backup-IconLayout }
     $items = foreach ($item in (Get-DesktopItems)) {
         [PSCustomObject]@{ Path = $item.FullName; WasHidden = [bool]($item.Attributes -band [IO.FileAttributes]::Hidden) }
     }
-    Write-Snapshot $items (Get-SystemIconState) (Get-ToastsEnabled) $look $taskbarState
+    Write-Snapshot $items (Get-SystemIconState) (Get-ToastsEnabled) $look $taskbarState $visibleNames
 }
 
 function Invoke-DesktopRefreshRetry {
@@ -633,6 +1059,7 @@ function Invoke-DesktopRefreshRetry {
 }
 
 function Hide-AllIcons {
+    Close-KeepIconOverlay
     $cfg = Get-ToolConfig
     $fresh = -not (Test-Path $snapshotPath)
     $look = $null
@@ -643,9 +1070,8 @@ function Hide-AllIcons {
     if ($fresh -and $cfg.AutoHideTaskbarWhileHidden) {
         try { $tb = Get-TaskbarAppBarState } catch { $tb = $null }
     }
-    if ($fresh) { Ensure-Baseline $look $tb }
+    if ($fresh) { Ensure-Baseline $look $tb $null }
     $failed = Apply-HiddenWithElevate (Get-DesktopItems) $true $true
-    Invoke-DesktopRefreshRetry
     $protect = Get-ProtectedNames
     $retry = @()
     foreach ($item in (Get-DesktopItems)) {
@@ -654,19 +1080,22 @@ function Hide-AllIcons {
     }
     if ($retry.Count -gt 0) {
         $failed += Apply-HiddenWithElevate $retry $true $true
-        Invoke-DesktopRefreshRetry
     }
     if ($fresh -and $cfg.HideSystemDesktopIcons) { try { Set-SystemIconHidden $true $null } catch {} }
     if ($fresh -and $cfg.QuietToastsWhileHidden) { try { Set-ToastsEnabled 0 } catch {} }
     if ($fresh -and $cfg.ApplyCaptureLook) { try { Apply-CaptureLook $look } catch {} }
     if ($fresh -and $cfg.AutoHideTaskbarWhileHidden) { try { Enable-CaptureTaskbarAutoHide } catch {} }
+    try { [System.Windows.Forms.Application]::DoEvents() } catch {}
+    Start-Sleep -Milliseconds 400
     try { Set-ExplorerHideIcons 1 } catch {}
-    Refresh-Desktop
+    try { Set-DesktopIconListVisible $false } catch {}
+    Start-HideAssertTimer
     return $failed
 }
 
 function Restore-Original {
     if (-not (Test-Path $snapshotPath)) { return @() }
+    Close-KeepIconOverlay
     $snapshot   = Read-Snapshot
     $knownPaths = @($snapshot.Items.Path)
     $failed = @()
@@ -691,33 +1120,65 @@ function Restore-Original {
     if ($null -ne $snapshot.ToastsEnabled) { Set-ToastsEnabled ([int]$snapshot.ToastsEnabled) }
     Restore-CaptureLook $snapshot.CaptureLook
     Restore-TaskbarAppBarState $snapshot.TaskbarAppBarState
-    if ($null -ne $snapshot.ExplorerHideIcons) { try { Set-ExplorerHideIcons ([int]$snapshot.ExplorerHideIcons) } catch {} }
-    else { try { Set-ExplorerHideIcons 0 } catch {} }
+    Stop-HideAssertTimer
+    try { Set-ExplorerHideIcons 0 } catch {}
+    try { Set-DesktopIconListVisible $true } catch {}
+    if ($null -ne $snapshot.ExplorerShowHidden) { try { Set-ExplorerShowHidden ([int]$snapshot.ExplorerShowHidden) } catch {} }
+    $stillHidden = @()
+    foreach ($entry in @($snapshot.Items)) {
+        if ($entry.WasHidden) { continue }
+        if (-not (Test-Path -LiteralPath $entry.Path)) { continue }
+        try {
+            $again = Get-Item -LiteralPath $entry.Path -Force
+            if ([bool]($again.Attributes -band [IO.FileAttributes]::Hidden)) { $stillHidden += $again }
+        } catch {}
+    }
+    if ($stillHidden.Count -gt 0) {
+        $failed += Apply-HiddenWithElevate $stillHidden $false $false
+    }
     Remove-Item $snapshotPath -Force
+    Refresh-DesktopIconView
     $cfg = Get-ToolConfig
     if ($cfg.PreservePositions) { Restore-IconLayout } else { Invoke-DesktopRefreshRetry }
     return $failed
 }
 
 function Apply-VisibleSet([string[]]$visibleNames) {
-    Ensure-Baseline
-    $protect = Get-ProtectedNames
-    $toHide = @()
-    $toShow = @()
-    foreach ($item in (Get-DesktopItems)) {
-        if ($item.Name -in $protect) { continue }
-        $shouldBeVisible = $item.Name -in $visibleNames
-        if ($shouldBeVisible) { $toShow += $item } else { $toHide += $item }
+    $visibleNames = @($visibleNames | ForEach-Object { [string]$_ } | Where-Object { $_ })
+    if ($visibleNames.Count -eq 0) {
+        Close-KeepIconOverlay
+        return Hide-AllIcons
     }
-    $failed = @()
-    $failed += Apply-HiddenWithElevate $toHide $true $true
-    $failed += Apply-HiddenWithElevate $toShow $false $true
-    try { Set-ExplorerHideIcons 0 } catch {}
-    Refresh-Desktop
-    return $failed
+    $cfg = Get-ToolConfig
+    $fresh = -not (Test-Path $snapshotPath)
+    $look = $null
+    $tb = $null
+    if ($fresh -and $cfg.ApplyCaptureLook) {
+        try { $look = Get-CaptureLookState } catch { $look = $null }
+    }
+    if ($fresh -and $cfg.AutoHideTaskbarWhileHidden) {
+        try { $tb = Get-TaskbarAppBarState } catch { $tb = $null }
+    }
+    if ($fresh) { Ensure-Baseline $look $tb @($visibleNames) }
+    else { Update-SnapshotVisibleNames @($visibleNames) }
+    $uiaMap = $null
+    try { $uiaMap = Get-DesktopIconScreenRects } catch { $uiaMap = $null }
+    if ($fresh -and $cfg.HideSystemDesktopIcons) { try { Set-SystemIconHidden $true $null } catch {} }
+    if ($fresh -and $cfg.QuietToastsWhileHidden) { try { Set-ToastsEnabled 0 } catch {} }
+    if ($fresh -and $cfg.ApplyCaptureLook) { try { Apply-CaptureLook $look } catch {} }
+    if ($fresh -and $cfg.AutoHideTaskbarWhileHidden) { try { Enable-CaptureTaskbarAutoHide } catch {} }
+    try { [System.Windows.Forms.Application]::DoEvents() } catch {}
+    Start-Sleep -Milliseconds 250
+    Show-KeepIconOverlay $visibleNames $uiaMap
+    try { Set-ExplorerHideIcons 1 } catch {}
+    try { Set-DesktopIconListVisible $false } catch {}
+    Send-KeepIconOverlayToBack
+    Start-HideAssertTimer
+    return @()
 }
 
 function Reset-DesktopState {
+    Close-KeepIconOverlay
     $snap = $null
     if (Test-Path $snapshotPath) { $snap = Read-Snapshot }
     $failed = Apply-HiddenWithElevate (Get-DesktopItems) $false $false
@@ -727,10 +1188,13 @@ function Reset-DesktopState {
     else { Set-ToastsEnabled 1 }
     if ($snap) { Restore-CaptureLook $snap.CaptureLook }
     if ($snap) { Restore-TaskbarAppBarState $snap.TaskbarAppBarState }
-    if ($snap -and $null -ne $snap.ExplorerHideIcons) { try { Set-ExplorerHideIcons ([int]$snap.ExplorerHideIcons) } catch {} }
-    else { try { Set-ExplorerHideIcons 0 } catch {} }
+    Stop-HideAssertTimer
+    try { Set-ExplorerHideIcons 0 } catch {}
+    try { Set-DesktopIconListVisible $true } catch {}
+    if ($snap -and $null -ne $snap.ExplorerShowHidden) { try { Set-ExplorerShowHidden ([int]$snap.ExplorerShowHidden) } catch {} }
     Remove-Item $snapshotPath -Force -ErrorAction SilentlyContinue
     Remove-Item $layoutBackupPath -Force -ErrorAction SilentlyContinue
+    Refresh-DesktopIconView
     Invoke-DesktopRefreshRetry
     return $failed
 }
@@ -934,10 +1398,33 @@ function Sync-UiState {
     } catch {}
 }
 
+function Get-ChecklistVisibleNames {
+    if (-not $script:checklist -or $script:checklist.IsDisposed) { return $null }
+    $visible = @()
+    for ($i = 0; $i -lt $script:checklist.Items.Count; $i++) {
+        if ($script:checklist.GetItemChecked($i)) { $visible += [string]$script:checklist.Items[$i] }
+    }
+    return @($visible)
+}
+
+function Test-CustomizeTabSelected {
+    try {
+        return ($script:tabs -and -not $script:tabs.IsDisposed -and $script:tabs.SelectedTab.Text -eq 'Customize')
+    } catch {
+        return $false
+    }
+}
+
 function Invoke-HideNow([bool]$fromUi) {
     $cfg = Get-ToolConfig
+    $customize = $fromUi -and (Test-CustomizeTabSelected)
+    $visible = if ($customize) { Get-ChecklistVisibleNames } else { $null }
     if ($fromUi -and $cfg.ConfirmLargeHide) {
-        $count = @((Get-DesktopItems) | Where-Object { $_.Name -ne 'desktop.ini' }).Count
+        $count = if ($customize) {
+            @((Get-DesktopItems) | Where-Object { $_.Name -ne 'desktop.ini' -and $_.Name -notin $visible }).Count
+        } else {
+            @((Get-DesktopItems) | Where-Object { $_.Name -ne 'desktop.ini' }).Count
+        }
         if ($count -ge 100) {
             $r = [System.Windows.Forms.MessageBox]::Show(
                 "$count items will be hidden.`n`nRestore with $($cfg.HotkeyToggle), the tray icon, or Restore Desktop Icons on the desktop.",
@@ -949,7 +1436,7 @@ function Invoke-HideNow([bool]$fromUi) {
         $script:controlForm.Hide()
         [System.Windows.Forms.Application]::DoEvents()
     }
-    $failed = Hide-AllIcons
+    $failed = if ($customize) { Apply-VisibleSet $visible } else { Hide-AllIcons }
     Start-AutoRestoreIfNeeded
     Sync-UiState
     Show-Balloon "Icons hidden. Press $($cfg.HotkeyToggle) to restore."
@@ -1092,10 +1579,14 @@ function Show-ControlWindow {
     $tabSet = New-Object System.Windows.Forms.TabPage
     $tabSet.Text = 'Settings'
     $tabSet.BackColor = [System.Drawing.Color]::White
+    $tabSet.AutoScroll = $true
+    $tabLook.AutoScroll = $true
+    $tabCust.AutoScroll = $true
     [void]$tabs.TabPages.Add($tabHome)
     [void]$tabs.TabPages.Add($tabLook)
     [void]$tabs.TabPages.Add($tabCust)
     [void]$tabs.TabPages.Add($tabSet)
+    $script:tabs = $tabs
 
     $status = New-Object System.Windows.Forms.Panel
     $status.Location = New-Object System.Drawing.Point(16, 16)
@@ -1251,7 +1742,7 @@ function Show-ControlWindow {
     $lookNote.Location = New-Object System.Drawing.Point(16, 334)
     $lookNote.Size = New-Object System.Drawing.Size(456, 96)
     $lookNote.ForeColor = [System.Drawing.Color]::FromArgb(80, 80, 80)
-    $lookNote.Text = "This is not a full Personalization settings page.`nThe Hide button at the bottom (or Win+Shift+D) applies the look and hides icons. Restore puts yours back.`nAuto-hide uses the Windows taskbar setting and is undone on Restore."
+    $lookNote.Text = "This is not a full Personalization settings page.`nThe Hide button at the bottom (or Win+Shift+D) applies the look and hides icons. Restore puts yours back.`nChanging wallpaper (here or in Windows) rebuilds the desktop; the app keeps hiding icons until you Restore."
     $tabLook.Controls.Add($lookNote)
 
     $script:lookApply = $applyLook
@@ -1321,24 +1812,37 @@ function Show-ControlWindow {
     })
 
     $custLbl = New-Object System.Windows.Forms.Label
-    $custLbl.Text = 'Checked icons stay visible. Everything else is hidden.'
+    $custLbl.Text = 'Check files that should stay on the wallpaper. Uncheck the rest, then Apply now (or Hide at the bottom). Kept icons stay where they are when Windows reports their positions.'
     $custLbl.Location = New-Object System.Drawing.Point(12, 12)
-    $custLbl.Size = New-Object System.Drawing.Size(460, 24)
+    $custLbl.Size = New-Object System.Drawing.Size(460, 48)
     $tabCust.Controls.Add($custLbl)
 
     $checklist = New-Object System.Windows.Forms.CheckedListBox
-    $checklist.Location = New-Object System.Drawing.Point(12, 40)
-    $checklist.Size = New-Object System.Drawing.Size(464, 250)
+    $checklist.Location = New-Object System.Drawing.Point(12, 64)
+    $checklist.Size = New-Object System.Drawing.Size(464, 238)
     $checklist.CheckOnClick = $true
     $tabCust.Controls.Add($checklist)
     $script:checklist = $checklist
 
     $script:PopulateChecklist = {
         $script:checklist.Items.Clear()
+        $checked = $null
+        if (Test-Path $snapshotPath) {
+            $snap = Read-Snapshot
+            if ($snap -and $null -ne $snap.VisibleNames) {
+                $checked = @($snap.VisibleNames | ForEach-Object { [string]$_ })
+            } else {
+                $checked = @()
+            }
+        }
         foreach ($item in (Get-DesktopItems | Sort-Object Name)) {
             if ($item.Name -eq 'desktop.ini') { continue }
-            $isHidden = [bool]($item.Attributes -band [IO.FileAttributes]::Hidden)
-            [void]$script:checklist.Items.Add($item.Name, -not $isHidden)
+            $on = if ($null -ne $checked) {
+                $item.Name -in $checked
+            } else {
+                -not [bool]($item.Attributes -band [IO.FileAttributes]::Hidden)
+            }
+            [void]$script:checklist.Items.Add($item.Name, $on)
         }
     }
     & $script:PopulateChecklist
@@ -1376,7 +1880,7 @@ function Show-ControlWindow {
         $failed = Apply-VisibleSet -visibleNames $visible
         & $script:PopulateChecklist
         Sync-UiState
-        Show-Balloon 'Desktop updated.'
+        Show-Balloon "Kept $($visible.Count) icon(s) visible. Restore with the tray or Win+Shift+D."
         Report-Failures $failed
     })
     $tabCust.Controls.Add($applyBtn)
@@ -1647,19 +2151,27 @@ function Show-ControlWindow {
     Add-HotkeyRow 'Hide / restore' $cfg0.HotkeyToggle 'HotkeyToggle'
     Add-HotkeyRow 'Hide after delay' $cfg0.HotkeyDelayedHide 'HotkeyDelayedHide'
     Add-HotkeyRow 'Restore only' $cfg0.HotkeyRestore 'HotkeyRestore'
+    $script:setY += 8
 
     $about = New-Object System.Windows.Forms.Label
-    $about.Location = New-Object System.Drawing.Point(16, 430)
-    $about.Size = New-Object System.Drawing.Size(460, 36)
+    $about.Location = New-Object System.Drawing.Point(16, $script:setY)
+    $about.Size = New-Object System.Drawing.Size(440, 36)
     $about.ForeColor = [System.Drawing.Color]::FromArgb(90, 90, 90)
     $about.Text = "Desktop Icon Toggle $appVersion   |   Uninstall from Settings > Apps   |   Files are never deleted"
     $tabSet.Controls.Add($about)
+    $script:setY += 40
 
     $hkStatus = New-Object System.Windows.Forms.Label
-    $hkStatus.Location = New-Object System.Drawing.Point(16, 468)
-    $hkStatus.Size = New-Object System.Drawing.Size(460, 36)
+    $hkStatus.Location = New-Object System.Drawing.Point(16, $script:setY)
+    $hkStatus.Size = New-Object System.Drawing.Size(440, 48)
     $tabSet.Controls.Add($hkStatus)
     $script:hotkeyStatus = $hkStatus
+    $script:setY += 56
+
+    $scrollPad = New-Object System.Windows.Forms.Panel
+    $scrollPad.Location = New-Object System.Drawing.Point(0, $script:setY)
+    $scrollPad.Size = New-Object System.Drawing.Size(1, 16)
+    $tabSet.Controls.Add($scrollPad)
 
     $tabs.Add_SelectedIndexChanged({
         param($sender, $e)
@@ -1725,12 +2237,7 @@ $resetItem.Add_Click({
 [void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
 
 $exitItem = New-Object System.Windows.Forms.ToolStripMenuItem 'Exit'
-$exitItem.Add_Click({
-    $notifyIcon.Visible = $false
-    $notifyIcon.Dispose()
-    if ($script:hotKeyWindow) { $script:hotKeyWindow.Dispose() }
-    [System.Windows.Forms.Application]::Exit()
-})
+$exitItem.Add_Click({ Invoke-AppStop })
 [void]$menu.Items.Add($exitItem)
 
 $menu.add_Opening({
@@ -1764,12 +2271,30 @@ if ($script:hotkeyFailures -and $script:hotkeyFailures.Count -gt 0) {
     Show-Balloon ('Shortcut in use, pick another in Settings: ' + ($script:hotkeyFailures -join ', '))
 }
 Sync-UiState
+Start-IpcTimer
 
-if (Test-DesktopHidden) { Start-AutoRestoreIfNeeded }
+if ($Stop) {
+    try { if (Test-DesktopHidden) { Restore-Original } } catch {}
+    exit 0
+}
+
+if ($Hide -and -not (Test-DesktopHidden)) {
+    try { Invoke-HideNow $false } catch {
+        try { Set-DesktopIconListVisible $false } catch {}
+        "$(Get-Date -Format 'u')  Hide failed: $($_.Exception.Message)" | Out-File -FilePath (Join-Path $PSScriptRoot 'error.log') -Append -Encoding UTF8
+    }
+}
+
+if (Test-DesktopHidden) {
+    Assert-DesktopIconsHidden
+    Start-HideAssertTimer
+    Start-AutoRestoreIfNeeded
+}
 
 if ($ShowUi) {
     Show-ControlWindow
     Show-FirstRun
+    if (Test-DesktopHidden) { Assert-DesktopIconsHidden }
 } elseif (Test-DesktopHidden) {
     Show-Balloon "Desktop is still hidden. Press $((Get-ToolConfig).HotkeyToggle) to restore."
 } elseif (-not (Get-ToolConfig).FirstRunDone) {

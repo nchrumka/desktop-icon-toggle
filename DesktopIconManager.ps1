@@ -83,6 +83,10 @@ function Get-ProtectedNames {
     return $names
 }
 
+Add-Type -Namespace Win32 -Name NativeMethods -MemberDefinition @"
+[System.Runtime.InteropServices.DllImport("shell32.dll")]
+public static extern void SHChangeNotify(int wEventId, int uFlags, System.IntPtr dwItem1, System.IntPtr dwItem2);
+"@
 Add-Type -Namespace Win32 -Name DesktopIcons -MemberDefinition @"
 [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
 public static extern System.IntPtr FindWindow(string lpClassName, string lpWindowName);
@@ -90,6 +94,8 @@ public static extern System.IntPtr FindWindow(string lpClassName, string lpWindo
 public static extern System.IntPtr FindWindowEx(System.IntPtr hwndParent, System.IntPtr hwndChildAfter, string lpszClass, string lpszWindow);
 [System.Runtime.InteropServices.DllImport("user32.dll")]
 public static extern System.IntPtr SendMessage(System.IntPtr hWnd, uint Msg, System.IntPtr wParam, System.IntPtr lParam);
+[System.Runtime.InteropServices.DllImport("user32.dll")]
+public static extern bool ShowWindow(System.IntPtr hWnd, int nCmdShow);
 "@
 Add-Type -Namespace Win32 -Name DesktopLook -MemberDefinition @"
 [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
@@ -180,36 +186,33 @@ function Get-ExplorerHideIcons {
     }
 }
 
-function Invoke-DesktopIconViewToggle {
+function Set-DesktopIconListVisible([bool]$visible) {
+    $cmd = if ($visible) { 5 } else { 0 }
     $zero = [IntPtr]::Zero
-    $cmd = [uint32]0x0111
-    $id = [IntPtr]0x7402
     try {
-        $progman = [Win32.DesktopIcons]::FindWindow('Progman', $null)
+        $progman = [Win32.DesktopIcons]::FindWindow('Progman', 'Program Manager')
+        $def = [IntPtr]::Zero
         if ($progman -ne $zero) {
             $def = [Win32.DesktopIcons]::FindWindowEx($progman, $zero, 'SHELLDLL_DefView', $null)
-            if ($def -ne $zero) { [void][Win32.DesktopIcons]::SendMessage($def, $cmd, $id, $zero) }
         }
-        $worker = $zero
-        for ($i = 0; $i -lt 24; $i++) {
-            $worker = [Win32.DesktopIcons]::FindWindowEx($zero, $worker, 'WorkerW', $null)
-            if ($worker -eq $zero) { break }
-            $def = [Win32.DesktopIcons]::FindWindowEx($worker, $zero, 'SHELLDLL_DefView', $null)
-            if ($def -ne $zero) { [void][Win32.DesktopIcons]::SendMessage($def, $cmd, $id, $zero) }
+        if ($def -ne $zero) {
+            $list = [Win32.DesktopIcons]::FindWindowEx($def, $zero, 'SysListView32', 'FolderView')
+            if ($list -eq $zero) {
+                $list = [Win32.DesktopIcons]::FindWindowEx($def, $zero, 'SysListView32', [NullString]::Value)
+            }
+            if ($list -ne $zero) { [void][Win32.DesktopIcons]::ShowWindow($list, $cmd) }
         }
     } catch {}
 }
 
 function Set-ExplorerHideIcons([int]$hide) {
     $want = if ($hide) { 1 } else { 0 }
-    $now = Get-ExplorerHideIcons
     $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
     try {
         if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null }
         New-ItemProperty -Path $key -Name HideIcons -PropertyType DWord -Value $want -Force | Out-Null
     } catch {}
-    if ($now -ne $want) { Invoke-DesktopIconViewToggle }
-    Refresh-Desktop
+    Set-DesktopIconListVisible ($want -eq 0)
 }
 
 function Restore-ExplorerHideIcons($snap) {

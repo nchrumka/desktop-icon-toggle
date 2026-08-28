@@ -141,7 +141,7 @@ Write-Host "Created Start menu shortcut. Restore Desktop Icons remains on the de
 $uninstKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\DesktopIconToggle'
 New-Item -Path $uninstKey -Force | Out-Null
 Set-ItemProperty $uninstKey -Name DisplayName -Value 'Desktop Icon Toggle'
-Set-ItemProperty $uninstKey -Name DisplayVersion -Value '1.4.6'
+Set-ItemProperty $uninstKey -Name DisplayVersion -Value '1.5.0'
 Set-ItemProperty $uninstKey -Name Publisher -Value 'Desktop Icon Toggle'
 Set-ItemProperty $uninstKey -Name InstallLocation -Value $installDir
 Set-ItemProperty $uninstKey -Name NoModify -Value 1 -Type DWord
@@ -151,7 +151,10 @@ if (Test-Path $icoDest) {
 } elseif ($builtExe) {
     Set-ItemProperty $uninstKey -Name DisplayIcon -Value $exeDest
 }
-Set-ItemProperty $uninstKey -Name UninstallString -Value "powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File `"$(Join-Path $installDir 'Uninstall.ps1')`""
+$uninstFile = Join-Path $installDir 'Uninstall.ps1'
+$uninstCmd = "`"$psExe`" -NoProfile -ExecutionPolicy Bypass -STA -File `"$uninstFile`""
+Set-ItemProperty $uninstKey -Name UninstallString -Value $uninstCmd
+Set-ItemProperty $uninstKey -Name QuietUninstallString -Value "$uninstCmd -Silent"
 Write-Host "Registered in Settings > Apps." -ForegroundColor DarkGreen
 
 Start-Process -FilePath $psExe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$trayDest`" -ShowUi"
