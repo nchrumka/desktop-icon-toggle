@@ -64,14 +64,20 @@ $builtExe = $false
 if ((Test-Path $csc) -and (Test-Path $launcherSrc)) {
     $wf = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\System.Windows.Forms.dll'
     $manifest = Join-Path $PSScriptRoot 'app.manifest'
-    $cscArgs = @('/nologo', '/target:winexe', '/optimize+', "/r:$wf", "/out:$exeDest", $launcherSrc)
-    if (Test-Path $manifest) { $cscArgs = @('/nologo', '/target:winexe', '/optimize+', "/win32manifest:$manifest", "/r:$wf", "/out:$exeDest", $launcherSrc) }
-    if ((Test-Path $icoDest) -and (Test-Path $manifest)) {
-        $cscArgs = @('/nologo', '/target:winexe', '/optimize+', "/win32icon:$icoDest", "/win32manifest:$manifest", "/r:$wf", "/out:$exeDest", $launcherSrc)
-    } elseif (Test-Path $icoDest) {
-        $cscArgs = @('/nologo', '/target:winexe', '/optimize+', "/win32icon:$icoDest", "/r:$wf", "/out:$exeDest", $launcherSrc)
+    $cscArgs = New-Object System.Collections.Generic.List[string]
+    [void]$cscArgs.Add('/nologo')
+    [void]$cscArgs.Add('/target:winexe')
+    [void]$cscArgs.Add('/optimize+')
+    [void]$cscArgs.Add("/r:$wf")
+    [void]$cscArgs.Add("/out:$exeDest")
+    if (Test-Path $manifest) { [void]$cscArgs.Add("/win32manifest:$manifest") }
+    if (Test-Path $icoDest) { [void]$cscArgs.Add("/win32icon:$icoDest") }
+    foreach ($resName in @('DesktopIconTray.ps1','DesktopIconManager.ps1','Uninstall.ps1','App.ico','App-Hidden.ico','Run-Hidden.vbs')) {
+        $resPath = Join-Path $PSScriptRoot $resName
+        if (Test-Path $resPath) { [void]$cscArgs.Add("/resource:$resPath,$resName") }
     }
-    & $csc @cscArgs
+    [void]$cscArgs.Add($launcherSrc)
+    & $csc @($cscArgs.ToArray())
     if ($LASTEXITCODE -eq 0 -and (Test-Path $exeDest)) {
         $builtExe = $true
         Write-Host "Built DesktopIconToggle.exe" -ForegroundColor DarkGreen
@@ -162,7 +168,7 @@ Write-Host "Created Start menu shortcut. Restore Desktop Icons remains on the de
 $uninstKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\DesktopIconToggle'
 New-Item -Path $uninstKey -Force | Out-Null
 Set-ItemProperty $uninstKey -Name DisplayName -Value 'Desktop Icon Toggle'
-Set-ItemProperty $uninstKey -Name DisplayVersion -Value '1.4.1'
+Set-ItemProperty $uninstKey -Name DisplayVersion -Value '1.4.2'
 Set-ItemProperty $uninstKey -Name Publisher -Value 'Desktop Icon Toggle'
 Set-ItemProperty $uninstKey -Name InstallLocation -Value $installDir
 Set-ItemProperty $uninstKey -Name NoModify -Value 1 -Type DWord

@@ -1,16 +1,20 @@
 # Desktop Icon Toggle — user manual
 
-Version 1.4.1
+Version 1.4.2
 
 Hide desktop icons for a clean screenshot or recording, then bring everything back. The app does not take screenshots. After icons are hidden, use **Win+Shift+S** or your usual recorder.
 
 ## 1. Install
 
-1. Download **[DesktopIconToggle-1.4.1.zip](https://github.com/nchrumka/desktop-icon-toggle/releases/latest)** from the [latest GitHub Release](https://github.com/nchrumka/desktop-icon-toggle/releases/latest). Fallback: [zip on the main branch](https://github.com/nchrumka/desktop-icon-toggle/raw/main/DesktopIconToggle-1.4.1.zip).
+Primary download: **[latest GitHub Release](https://github.com/nchrumka/desktop-icon-toggle/releases/latest)**. Prefer the zip and **Install.bat** so Start menu, tray-at-logon, and uninstall are registered.
+
+1. Download **[DesktopIconToggle-1.4.2.zip](https://github.com/nchrumka/desktop-icon-toggle/releases/latest)**. Fallback: [zip on the main branch](https://github.com/nchrumka/desktop-icon-toggle/raw/main/DesktopIconToggle-1.4.2.zip).
 2. Unzip the folder so `Install.bat` sits next to the scripts, not inside the zip.
 3. Double-click **Install.bat**.
-4. If SmartScreen says **Windows protected your PC**, choose **More info**, then **Run anyway**. The launcher is signed with a local certificate; SmartScreen may still warn the first time.
+4. If SmartScreen says **Windows protected your PC**, choose **More info**, then **Run anyway**. The launcher may be unsigned; SmartScreen may still warn the first time.
 5. A **Desktop Icon Toggle** window should open.
+
+The **1.4.2** exe unpacks its scripts into `%LOCALAPPDATA%\DesktopIconToggle` when `DesktopIconTray.ps1` is not next to it. Do **not** use the **1.4.1** exe alone; that version needed the `.ps1` files beside it.
 
 You do **not** need administrator rights for your own Desktop (including a OneDrive Desktop). The first time a **Public Desktop** icon cannot be hidden, Windows may ask for elevation once. After that, a scheduled task named `DesktopIconToggleHelper` can finish those items without another prompt.
 
