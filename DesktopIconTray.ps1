@@ -127,7 +127,7 @@ $toastKey   = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Set
 $bagKey           = 'HKCU\Software\Microsoft\Windows\Shell\Bags\1\Desktop'
 $lookBackupPath   = Join-Path $root 'capture-wallpaper.bak'
 $lookSolidPath    = Join-Path $root 'capture-solid.bmp'
-$appVersion       = '1.4.4'
+$appVersion       = '1.4.5'
 $script:hideBtn   = $null
 $script:controlForm = $null
 $script:countdownLeft = 0
@@ -153,6 +153,7 @@ function Get-DefaultConfig {
         CaptureWallpaper      = 'LightGray'
         CapturePicturePath    = ''
         CaptureTheme          = 'Keep'
+        AutoHideTaskbarWhileHidden = $false
     }
 }
 
@@ -255,6 +256,76 @@ public static extern int SystemParametersInfo(int uAction, int uParam, string lp
 [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
 public static extern System.IntPtr SendMessageTimeout(System.IntPtr hWnd, uint Msg, System.IntPtr wParam, string lParam, uint flags, uint timeout, out System.IntPtr result);
 "@
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+namespace Win32 {
+  public static class Taskbar {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT {
+      public int left;
+      public int top;
+      public int right;
+      public int bottom;
+    }
+    [StructLayout(LayoutKind.Sequential)]
+    public struct APPBARDATA {
+      public int cbSize;
+      public IntPtr hWnd;
+      public uint uCallbackMessage;
+      public uint uEdge;
+      public RECT rc;
+      public int lParam;
+    }
+    [DllImport("shell32.dll")]
+    public static extern IntPtr SHAppBarMessage(uint dwMessage, ref APPBARDATA pData);
+    public static int GetState() {
+      APPBARDATA abd = new APPBARDATA();
+      abd.cbSize = Marshal.SizeOf(typeof(APPBARDATA));
+      return (int)SHAppBarMessage(4, ref abd);
+    }
+    public static void SetState(int state) {
+      APPBARDATA abd = new APPBARDATA();
+      abd.cbSize = Marshal.SizeOf(typeof(APPBARDATA));
+      abd.lParam = state;
+      SHAppBarMessage(10, ref abd);
+    }
+  }
+}
+"@
+
+function Get-TaskbarAppBarState {
+    [Win32.Taskbar]::GetState()
+}
+
+function Set-TaskbarAppBarState([int]$state) {
+    [Win32.Taskbar]::SetState($state)
+}
+
+function Set-StuckRectsAutoHide([bool]$on) {
+    foreach ($name in @('StuckRects3', 'StuckRects2')) {
+        $key = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\$name"
+        try {
+            $bytes = [byte[]](Get-ItemProperty -Path $key -Name Settings -ErrorAction Stop).Settings
+            if ($null -eq $bytes -or $bytes.Length -lt 9) { continue }
+            if ($on) { $bytes[8] = [byte]($bytes[8] -bor 1) }
+            else { $bytes[8] = [byte]($bytes[8] -band (-bnot 1)) }
+            Set-ItemProperty -Path $key -Name Settings -Value $bytes
+        } catch {}
+    }
+}
+
+function Enable-CaptureTaskbarAutoHide {
+    Set-TaskbarAppBarState ((Get-TaskbarAppBarState) -bor 1)
+    Set-StuckRectsAutoHide $true
+}
+
+function Restore-TaskbarAppBarState($saved) {
+    if ($null -eq $saved) { return }
+    Set-TaskbarAppBarState ([int]$saved)
+    Set-StuckRectsAutoHide ([bool](([int]$saved) -band 1))
+}
+
 function Refresh-Desktop { [Win32.NativeMethods]::SHChangeNotify(0x08000000, 0x0000, [IntPtr]::Zero, [IntPtr]::Zero) }
 
 function Get-IconFromFile([string]$name) {
@@ -481,28 +552,29 @@ function Read-Snapshot {
     if (-not (Test-Path $snapshotPath)) { return $null }
     $raw = Get-Content $snapshotPath -Raw | ConvertFrom-Json
     if ($raw.PSObject.Properties.Name -contains 'Items') { return $raw }
-    return [PSCustomObject]@{ Items = @($raw); SystemIcons = $null; ToastsEnabled = $null; CaptureLook = $null }
+    return [PSCustomObject]@{ Items = @($raw); SystemIcons = $null; ToastsEnabled = $null; CaptureLook = $null; TaskbarAppBarState = $null }
 }
 
-function Write-Snapshot($items, $sys, $toasts, $look) {
+function Write-Snapshot($items, $sys, $toasts, $look, $taskbarState) {
     [PSCustomObject]@{
         Items = @($items)
         SystemIcons = $sys
         ToastsEnabled = $toasts
         CaptureLook = $look
+        TaskbarAppBarState = $taskbarState
     } | ConvertTo-Json -Depth 6 | Set-Content -Path $snapshotPath -Encoding UTF8
 }
 
 function Test-DesktopHidden { Test-Path $snapshotPath }
 
-function Ensure-Baseline($look) {
+function Ensure-Baseline($look, $taskbarState) {
     if (Test-Path $snapshotPath) { return }
     $cfg = Get-ToolConfig
     if ($cfg.PreservePositions) { Backup-IconLayout }
     $items = foreach ($item in (Get-DesktopItems)) {
         [PSCustomObject]@{ Path = $item.FullName; WasHidden = [bool]($item.Attributes -band [IO.FileAttributes]::Hidden) }
     }
-    Write-Snapshot $items (Get-SystemIconState) (Get-ToastsEnabled) $look
+    Write-Snapshot $items (Get-SystemIconState) (Get-ToastsEnabled) $look $taskbarState
 }
 
 function Invoke-DesktopRefreshRetry {
@@ -516,7 +588,11 @@ function Hide-AllIcons {
     $fresh = -not (Test-Path $snapshotPath)
     $look = $null
     if ($fresh -and $cfg.ApplyCaptureLook) { $look = Get-CaptureLookState }
-    if ($fresh) { Ensure-Baseline $look }
+    if ($fresh) {
+        $tb = $null
+        if ($cfg.AutoHideTaskbarWhileHidden) { $tb = Get-TaskbarAppBarState }
+        Ensure-Baseline $look $tb
+    }
     $failed = Apply-HiddenWithElevate (Get-DesktopItems) $true $true
     Invoke-DesktopRefreshRetry
     $protect = Get-ProtectedNames
@@ -532,6 +608,7 @@ function Hide-AllIcons {
     if ($fresh -and $cfg.HideSystemDesktopIcons) { Set-SystemIconHidden $true $null }
     if ($fresh -and $cfg.QuietToastsWhileHidden) { Set-ToastsEnabled 0 }
     if ($fresh -and $cfg.ApplyCaptureLook) { Apply-CaptureLook $look }
+    if ($fresh -and $cfg.AutoHideTaskbarWhileHidden) { Enable-CaptureTaskbarAutoHide }
     Refresh-Desktop
     return $failed
 }
@@ -561,6 +638,7 @@ function Restore-Original {
     if ($null -ne $snapshot.SystemIcons) { Set-SystemIconHidden $false $snapshot.SystemIcons }
     if ($null -ne $snapshot.ToastsEnabled) { Set-ToastsEnabled ([int]$snapshot.ToastsEnabled) }
     Restore-CaptureLook $snapshot.CaptureLook
+    Restore-TaskbarAppBarState $snapshot.TaskbarAppBarState
     Remove-Item $snapshotPath -Force
     $cfg = Get-ToolConfig
     if ($cfg.PreservePositions) { Restore-IconLayout } else { Invoke-DesktopRefreshRetry }
@@ -593,6 +671,7 @@ function Reset-DesktopState {
     if ($snap -and $null -ne $snap.ToastsEnabled) { Set-ToastsEnabled ([int]$snap.ToastsEnabled) }
     else { Set-ToastsEnabled 1 }
     if ($snap) { Restore-CaptureLook $snap.CaptureLook }
+    if ($snap) { Restore-TaskbarAppBarState $snap.TaskbarAppBarState }
     Remove-Item $snapshotPath -Force -ErrorAction SilentlyContinue
     Remove-Item $layoutBackupPath -Force -ErrorAction SilentlyContinue
     Invoke-DesktopRefreshRetry
@@ -1088,11 +1167,18 @@ function Show-ControlWindow {
     $themeCombo.SelectedItem = $selTheme
     $tabLook.Controls.Add($themeCombo)
 
+    $autoHideTb = New-Object System.Windows.Forms.CheckBox
+    $autoHideTb.Text = 'Auto-hide the taskbar while icons are hidden'
+    $autoHideTb.Location = New-Object System.Drawing.Point(16, 302)
+    $autoHideTb.Size = New-Object System.Drawing.Size(456, 24)
+    $autoHideTb.Checked = [bool]$cfgLook.AutoHideTaskbarWhileHidden
+    $tabLook.Controls.Add($autoHideTb)
+
     $lookNote = New-Object System.Windows.Forms.Label
-    $lookNote.Location = New-Object System.Drawing.Point(16, 310)
-    $lookNote.Size = New-Object System.Drawing.Size(456, 72)
+    $lookNote.Location = New-Object System.Drawing.Point(16, 334)
+    $lookNote.Size = New-Object System.Drawing.Size(456, 96)
     $lookNote.ForeColor = [System.Drawing.Color]::FromArgb(80, 80, 80)
-    $lookNote.Text = "This is not a full Personalization settings page.`nHide (or Win+Shift+D) applies the look. Restore puts yours back, including the Restore Desktop Icons shortcut."
+    $lookNote.Text = "This is not a full Personalization settings page.`nHide (or Win+Shift+D) applies the look. Restore puts yours back, including the Restore Desktop Icons shortcut.`nAuto-hide uses the Windows taskbar setting and is undone on Restore. Use your hide/restore shortcut if the tray is tucked away."
     $tabLook.Controls.Add($lookNote)
 
     $script:lookApply = $applyLook
@@ -1116,6 +1202,12 @@ function Show-ControlWindow {
         $cfg.ApplyCaptureLook = $sender.Checked
         Save-ToolConfig $cfg
         & $script:SyncLookEnabled
+    })
+    $autoHideTb.Add_CheckedChanged({
+        param($sender, $e)
+        $cfg = Get-ToolConfig
+        $cfg.AutoHideTaskbarWhileHidden = $sender.Checked
+        Save-ToolConfig $cfg
     })
     $wallCombo.Add_SelectedIndexChanged({
         param($sender, $e)

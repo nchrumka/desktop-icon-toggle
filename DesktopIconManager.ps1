@@ -93,6 +93,76 @@ public static extern int SystemParametersInfo(int uAction, int uParam, string lp
 [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
 public static extern System.IntPtr SendMessageTimeout(System.IntPtr hWnd, uint Msg, System.IntPtr wParam, string lParam, uint flags, uint timeout, out System.IntPtr result);
 "@
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+namespace Win32 {
+  public static class Taskbar {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT {
+      public int left;
+      public int top;
+      public int right;
+      public int bottom;
+    }
+    [StructLayout(LayoutKind.Sequential)]
+    public struct APPBARDATA {
+      public int cbSize;
+      public IntPtr hWnd;
+      public uint uCallbackMessage;
+      public uint uEdge;
+      public RECT rc;
+      public int lParam;
+    }
+    [DllImport("shell32.dll")]
+    public static extern IntPtr SHAppBarMessage(uint dwMessage, ref APPBARDATA pData);
+    public static int GetState() {
+      APPBARDATA abd = new APPBARDATA();
+      abd.cbSize = Marshal.SizeOf(typeof(APPBARDATA));
+      return (int)SHAppBarMessage(4, ref abd);
+    }
+    public static void SetState(int state) {
+      APPBARDATA abd = new APPBARDATA();
+      abd.cbSize = Marshal.SizeOf(typeof(APPBARDATA));
+      abd.lParam = state;
+      SHAppBarMessage(10, ref abd);
+    }
+  }
+}
+"@
+
+function Get-TaskbarAppBarState {
+    [Win32.Taskbar]::GetState()
+}
+
+function Set-TaskbarAppBarState([int]$state) {
+    [Win32.Taskbar]::SetState($state)
+}
+
+function Set-StuckRectsAutoHide([bool]$on) {
+    foreach ($name in @('StuckRects3', 'StuckRects2')) {
+        $key = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\$name"
+        try {
+            $bytes = [byte[]](Get-ItemProperty -Path $key -Name Settings -ErrorAction Stop).Settings
+            if ($null -eq $bytes -or $bytes.Length -lt 9) { continue }
+            if ($on) { $bytes[8] = [byte]($bytes[8] -bor 1) }
+            else { $bytes[8] = [byte]($bytes[8] -band (-bnot 1)) }
+            Set-ItemProperty -Path $key -Name Settings -Value $bytes
+        } catch {}
+    }
+}
+
+function Enable-CaptureTaskbarAutoHide {
+    Set-TaskbarAppBarState ((Get-TaskbarAppBarState) -bor 1)
+    Set-StuckRectsAutoHide $true
+}
+
+function Restore-TaskbarAppBarState($saved) {
+    if ($null -eq $saved) { return }
+    Set-TaskbarAppBarState ([int]$saved)
+    Set-StuckRectsAutoHide ([bool](([int]$saved) -band 1))
+}
+
 
 function Refresh-Desktop {
     [Win32.NativeMethods]::SHChangeNotify(0x08000000, 0x0000, [IntPtr]::Zero, [IntPtr]::Zero)
@@ -294,6 +364,7 @@ function Restore-Icons {
     }
 
     Restore-CaptureLook $snap.CaptureLook
+    Restore-TaskbarAppBarState $snap.TaskbarAppBarState
     Remove-Item $snapshotPath -Force
 
     $cfg = Get-ToolConfig
@@ -311,6 +382,7 @@ function Reset-DesktopState {
     }
     Apply-HiddenToItems $items $false
     if ($snap) { Restore-CaptureLook $snap.CaptureLook }
+    if ($snap) { Restore-TaskbarAppBarState $snap.TaskbarAppBarState }
     Remove-Item $snapshotPath -Force -ErrorAction SilentlyContinue
     Remove-Item $layoutBackupPath -Force -ErrorAction SilentlyContinue
     Refresh-Desktop

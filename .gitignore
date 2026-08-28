@@ -1,6 +1,6 @@
 # Packaged copies
 *.zip
-!DesktopIconToggle-1.4.4.zip
+!DesktopIconToggle-1.4.5.zip
 
 # Runtime state (do not commit a live desktop snapshot)
 snapshot.json

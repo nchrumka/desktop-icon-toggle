@@ -142,7 +142,7 @@ Write-Host "Created Start menu shortcut. Restore Desktop Icons remains on the de
 $uninstKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\DesktopIconToggle'
 New-Item -Path $uninstKey -Force | Out-Null
 Set-ItemProperty $uninstKey -Name DisplayName -Value 'Desktop Icon Toggle'
-Set-ItemProperty $uninstKey -Name DisplayVersion -Value '1.4.4'
+Set-ItemProperty $uninstKey -Name DisplayVersion -Value '1.4.5'
 Set-ItemProperty $uninstKey -Name Publisher -Value 'Desktop Icon Toggle'
 Set-ItemProperty $uninstKey -Name InstallLocation -Value $installDir
 Set-ItemProperty $uninstKey -Name NoModify -Value 1 -Type DWord
