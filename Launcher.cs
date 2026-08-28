@@ -36,7 +36,7 @@ internal static class Program
             if (!File.Exists(tray))
             {
                 MessageBox.Show(
-                    "DesktopIconTray.ps1 could not be unpacked. Download DesktopIconToggle-1.4.5.zip from GitHub Releases and run Install.bat.",
+                    "DesktopIconTray.ps1 could not be unpacked. Download DesktopIconToggle-1.4.6.zip from GitHub Releases and run Install.bat.",
                     "Desktop Icon Toggle",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
@@ -90,7 +90,7 @@ internal static class Program
         {
             MessageBox.Show(
                 "DesktopIconTray.ps1 was not found next to this program, and this copy of DesktopIconToggle.exe does not include the app files.\n\n" +
-                "Download DesktopIconToggle-1.4.5.zip from GitHub Releases and run Install.bat:\n" +
+                "Download DesktopIconToggle-1.4.6.zip from GitHub Releases and run Install.bat:\n" +
                 "https://github.com/nchrumka/desktop-icon-toggle/releases/latest",
                 "Desktop Icon Toggle",
                 MessageBoxButtons.OK,

@@ -83,9 +83,13 @@ function Get-ProtectedNames {
     return $names
 }
 
-Add-Type -Namespace Win32 -Name NativeMethods -MemberDefinition @"
-[System.Runtime.InteropServices.DllImport("shell32.dll")]
-public static extern void SHChangeNotify(int wEventId, int uFlags, System.IntPtr dwItem1, System.IntPtr dwItem2);
+Add-Type -Namespace Win32 -Name DesktopIcons -MemberDefinition @"
+[System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
+public static extern System.IntPtr FindWindow(string lpClassName, string lpWindowName);
+[System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
+public static extern System.IntPtr FindWindowEx(System.IntPtr hwndParent, System.IntPtr hwndChildAfter, string lpszClass, string lpszWindow);
+[System.Runtime.InteropServices.DllImport("user32.dll")]
+public static extern System.IntPtr SendMessage(System.IntPtr hWnd, uint Msg, System.IntPtr wParam, System.IntPtr lParam);
 "@
 Add-Type -Namespace Win32 -Name DesktopLook -MemberDefinition @"
 [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
@@ -166,6 +170,51 @@ function Restore-TaskbarAppBarState($saved) {
 
 function Refresh-Desktop {
     [Win32.NativeMethods]::SHChangeNotify(0x08000000, 0x0000, [IntPtr]::Zero, [IntPtr]::Zero)
+}
+
+function Get-ExplorerHideIcons {
+    try {
+        return [int](Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' -Name HideIcons -ErrorAction Stop).HideIcons
+    } catch {
+        return 0
+    }
+}
+
+function Invoke-DesktopIconViewToggle {
+    $zero = [IntPtr]::Zero
+    $cmd = [uint32]0x0111
+    $id = [IntPtr]0x7402
+    try {
+        $progman = [Win32.DesktopIcons]::FindWindow('Progman', $null)
+        if ($progman -ne $zero) {
+            $def = [Win32.DesktopIcons]::FindWindowEx($progman, $zero, 'SHELLDLL_DefView', $null)
+            if ($def -ne $zero) { [void][Win32.DesktopIcons]::SendMessage($def, $cmd, $id, $zero) }
+        }
+        $worker = $zero
+        for ($i = 0; $i -lt 24; $i++) {
+            $worker = [Win32.DesktopIcons]::FindWindowEx($zero, $worker, 'WorkerW', $null)
+            if ($worker -eq $zero) { break }
+            $def = [Win32.DesktopIcons]::FindWindowEx($worker, $zero, 'SHELLDLL_DefView', $null)
+            if ($def -ne $zero) { [void][Win32.DesktopIcons]::SendMessage($def, $cmd, $id, $zero) }
+        }
+    } catch {}
+}
+
+function Set-ExplorerHideIcons([int]$hide) {
+    $want = if ($hide) { 1 } else { 0 }
+    $now = Get-ExplorerHideIcons
+    $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
+    try {
+        if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null }
+        New-ItemProperty -Path $key -Name HideIcons -PropertyType DWord -Value $want -Force | Out-Null
+    } catch {}
+    if ($now -ne $want) { Invoke-DesktopIconViewToggle }
+    Refresh-Desktop
+}
+
+function Restore-ExplorerHideIcons($snap) {
+    if ($snap -and $null -ne $snap.ExplorerHideIcons) { Set-ExplorerHideIcons ([int]$snap.ExplorerHideIcons) }
+    else { Set-ExplorerHideIcons 0 }
 }
 
 function Restore-CaptureLook($saved) {
@@ -314,6 +363,7 @@ function Hide-Icons {
     }
     $snapshot | ConvertTo-Json -Depth 3 | Set-Content -Path $snapshotPath -Encoding UTF8
     Apply-HiddenToItems $items $true
+    try { Set-ExplorerHideIcons 1 } catch {}
     Refresh-Desktop
     Write-Host "Hid $($snapshot.Count) icon(s). Recycle Bin and Restore Desktop Icons stay visible." -ForegroundColor Green
 }
@@ -365,6 +415,7 @@ function Restore-Icons {
 
     Restore-CaptureLook $snap.CaptureLook
     Restore-TaskbarAppBarState $snap.TaskbarAppBarState
+    Restore-ExplorerHideIcons $snap
     Remove-Item $snapshotPath -Force
 
     $cfg = Get-ToolConfig
@@ -383,6 +434,7 @@ function Reset-DesktopState {
     Apply-HiddenToItems $items $false
     if ($snap) { Restore-CaptureLook $snap.CaptureLook }
     if ($snap) { Restore-TaskbarAppBarState $snap.TaskbarAppBarState }
+    Restore-ExplorerHideIcons $snap
     Remove-Item $snapshotPath -Force -ErrorAction SilentlyContinue
     Remove-Item $layoutBackupPath -Force -ErrorAction SilentlyContinue
     Refresh-Desktop

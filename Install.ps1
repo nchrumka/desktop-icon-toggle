@@ -87,9 +87,9 @@ CreateObject("WScript.Shell").Run "$escaped", 0, False
 $launchWindow = Join-Path $installDir 'Launch-Window.vbs'
 $launchTray   = Join-Path $installDir 'Launch-Tray.vbs'
 $launchReset  = Join-Path $installDir 'Launch-Reset.vbs'
-Write-HiddenLauncher $launchWindow "powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File `"$trayDest`" -ShowUi"
-Write-HiddenLauncher $launchTray   "powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File `"$trayDest`""
-Write-HiddenLauncher $launchReset  "powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File `"$cliDest`" -Reset"
+Write-HiddenLauncher $launchWindow "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$trayDest`" -ShowUi"
+Write-HiddenLauncher $launchTray   "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$trayDest`""
+Write-HiddenLauncher $launchReset  "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$cliDest`" -Reset"
 
 if (-not (Test-Path $trayDest)) {
     throw "Copy appeared to succeed but $trayDest still doesn't exist. Check antivirus/permissions on $installDir."
@@ -118,11 +118,12 @@ function New-AppShortcut([string]$path, [string]$target, [string]$arguments, [st
     $sc.Save()
 }
 
-New-AppShortcut $startupLink "$env:SystemRoot\System32\wscript.exe" "`"$launchTray`"" 'Desktop Icon Toggle - runs in the notification area'
-$startTarget = "$env:SystemRoot\System32\wscript.exe"
-$startArgs = "`"$launchWindow`""
-$restoreTarget = "$env:SystemRoot\System32\wscript.exe"
-$restoreArgs = "`"$launchReset`""
+$psExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+New-AppShortcut $startupLink $psExe "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$trayDest`"" 'Desktop Icon Toggle - runs in the notification area'
+$startTarget = $psExe
+$startArgs = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$trayDest`" -ShowUi"
+$restoreTarget = $psExe
+$restoreArgs = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$cliDest`" -Reset"
 Write-Host "Created Startup shortcut: $startupLink" -ForegroundColor DarkGreen
 
 $programsDir = [Environment]::GetFolderPath('Programs')
@@ -153,7 +154,7 @@ if (Test-Path $icoDest) {
 Set-ItemProperty $uninstKey -Name UninstallString -Value "powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File `"$(Join-Path $installDir 'Uninstall.ps1')`""
 Write-Host "Registered in Settings > Apps." -ForegroundColor DarkGreen
 
-Start-Process -FilePath "$env:SystemRoot\System32\wscript.exe" -ArgumentList "`"$launchWindow`""
+Start-Process -FilePath $psExe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$trayDest`" -ShowUi"
 Write-Host "Launched Desktop Icon Toggle." -ForegroundColor DarkGreen
 
 Write-Host ""

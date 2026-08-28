@@ -60,7 +60,7 @@ Settings > Apps > **Desktop Icon Toggle**, or **Uninstall.bat**. Hidden icons an
 | `Uninstall.bat` / `Uninstall.ps1` | Restore desktop, then remove the app |
 | `DesktopIconTray.ps1` | Window, tray, hotkeys, Look tab |
 | `DesktopIconManager.ps1` | CLI hide/restore/reset and elevated Public Desktop helper |
-| `DesktopIconToggle.exe` | Prebuilt launcher (1.4.5) |
+| `DesktopIconToggle.exe` | Optional launcher (CrowdStrike may quarantine it; shortcuts use PowerShell) |
 | `Build-Launcher.ps1` | Rebuild the exe for a new zip (not run by Install.bat) |
 | `Launcher.cs` | Source for the launcher |
 | `USER-MANUAL.md` | Full how-to |

@@ -45,7 +45,7 @@ Closing the window does **not** quit the app. It stays in the tray.
 
 Recommended sequence:
 
-1. Press **Win+Shift+D**, or click **Hide desktop icons** on the Home tab.
+1. Press **Win+Shift+D**, or click **Hide desktop icons** at the bottom of the window (any tab).
    - Hide from the window closes the window first so the app is not in the shot.
 2. Press **Win+Shift+S** and snip, or start your recording.
 3. Press **Win+Shift+D** again to restore, or use the tray / Home **Restore**.
@@ -74,10 +74,11 @@ Reset shows every icon and also restores wallpaper/theme if a capture look was a
 ## 4. Home tab
 
 - Status: desktop **visible** or **hidden**
-- **Hide desktop icons** / **Restore desktop icons**
 - Delayed hide (if the delay in Settings is greater than 0)
 - **Show all icons (reset)**
 - Version number
+
+**Hide desktop icons** / **Restore desktop icons** sits at the bottom of the window on every tab, including Look.
 
 ## 5. Look tab (wallpaper and theme)
 
