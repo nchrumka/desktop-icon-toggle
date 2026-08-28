@@ -1,4 +1,5 @@
-# Rebuild DesktopIconToggle.exe for the zip/repo. Install.ps1 does not run this.
+# Rebuild DesktopIconToggle.exe locally if you want a launcher. GitHub Releases do not ship the exe.
+# Install.ps1 does not run this.
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'

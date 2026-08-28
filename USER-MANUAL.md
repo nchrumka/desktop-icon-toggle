@@ -1,22 +1,22 @@
 # Desktop Icon Toggle — user manual
 
-Version 1.4.6
+Version 1.5.0
 
 Hide desktop icons for a clean screenshot or recording, then bring everything back. The app does not take screenshots. After icons are hidden, use **Win+Shift+S** or your usual recorder.
 
 ## 1. Install
 
-Primary download: **[latest GitHub Release](https://github.com/nchrumka/desktop-icon-toggle/releases/latest)**. Prefer the zip and **Install.bat** so Start menu, tray-at-logon, and uninstall are registered.
+Primary download: **[latest GitHub Release](https://github.com/nchrumka/desktop-icon-toggle/releases/latest)**. The zip is script-only (no `.exe`). Run **Install.bat** so Start menu, tray-at-logon, and uninstall are registered.
 
-1. Download **[DesktopIconToggle-1.4.6.zip](https://github.com/nchrumka/desktop-icon-toggle/releases/latest)**. Fallback: [zip on the main branch](https://github.com/nchrumka/desktop-icon-toggle/raw/main/DesktopIconToggle-1.4.6.zip).
+1. Download **DesktopIconToggle-1.5.0.zip** from that page.
 2. Unzip the folder so `Install.bat` sits next to the scripts, not inside the zip.
 3. Double-click **Install.bat**.
 4. If SmartScreen says **Windows protected your PC**, choose **More info**, then **Run anyway**.
 5. A **Desktop Icon Toggle** window should open.
 
-Install copies the scripts and points Start menu / Startup / Restore Desktop Icons at those scripts. It does **not** compile with `csc.exe`. The exe is optional; if CrowdStrike quarantines `DesktopIconToggle.exe`, the shortcuts still work.
+Install copies the scripts and points Start menu / Startup / Restore Desktop Icons at PowerShell. There is no custom exe in the download. The SHA-256 of the zip is in the GitHub release notes.
 
-If EDR quarantines the whole folder, ask IT to allow `%LOCALAPPDATA%\DesktopIconToggle\`.
+If EDR quarantines the install folder, ask IT to allow `%LOCALAPPDATA%\DesktopIconToggle\`.
 
 You do **not** need administrator rights for your own Desktop (including a OneDrive Desktop). The first time a **Public Desktop** icon cannot be hidden, Windows may ask for elevation once. After that, a scheduled task named `DesktopIconToggleHelper` can finish those items without another prompt.
 
@@ -106,13 +106,14 @@ Look wallpaper/theme and taskbar auto-hide are **not** applied when you use the 
 
 ## 6. Customize tab
 
-Checked items **stay visible**; everything else is hidden. Recycle Bin is not in this list.
+Checked items **stay visible** on the wallpaper; everything else is hidden. Recycle Bin is not in this list.
 
-- **Apply now** changes visibility without using the Look wallpaper/theme.
+- Check the files that should remain, then **Apply now**, or **Hide desktop icons** while this tab is open.
+- **Apply now** updates the desktop from this tab. Home **Hide** still hides everything.
 - Save / load / delete **layouts** if you often keep the same few icons.
 - **Preserve icon positions on restore** restarts Explorer briefly so icons sit where they were. Leave this off unless you need it.
 
-If you Customize first, Hide will not run until you Restore or Reset (the app already has a snapshot). For a typical screenshot, use Hide, not Customize.
+Kept files are shown in their current spots when Windows reports those positions. Restore with **Win+Shift+D**, the tray, or **Restore Desktop Icons**.
 
 ## 7. Settings tab
 
@@ -143,7 +144,7 @@ If a shortcut is already used by another app, Settings tells you. Pick a differe
 
 **Not files:** Recycle Bin, This PC, Network — only if you enable that Settings option.
 
-**Never deleted:** the app only sets or clears the Hidden attribute.
+**Never deleted:** the app does not delete your desktop files.
 
 **OneDrive Desktop:** supported. The path is whatever Windows reports as your Desktop folder.
 
@@ -159,7 +160,7 @@ If a shortcut is already used by another app, Settings tells you. Pick a differe
 More info > Run anyway. Expected for an unsigned GitHub download.
 
 **CrowdStrike / EDR quarantine**  
-If Windows cannot find `DesktopIconToggle.exe`, CrowdStrike likely quarantined the launcher. 1.4.6 shortcuts use the scripts instead, so Start menu and Startup still work. Ask IT to allow `%LOCALAPPDATA%\DesktopIconToggle\` if the scripts are blocked too.
+The GitHub zip has no custom exe. Start menu and Startup run PowerShell scripts. If hide/install still fails, ask IT to allow `%LOCALAPPDATA%\DesktopIconToggle\`.
 
 **Already running**  
 Only one copy can run. Use the tray, the hotkey, or Start menu > Desktop Icon Toggle.

@@ -70,7 +70,7 @@ if (Test-Path $exeSrc) {
         $builtExe = $false
     }
 } else {
-    Write-Host "No exe in the zip; installing the scripts only." -ForegroundColor DarkYellow
+    Write-Host "Installing PowerShell scripts (no exe in this package)." -ForegroundColor DarkGreen
 }
 
 Get-ChildItem -LiteralPath $installDir -File -ErrorAction SilentlyContinue | ForEach-Object {

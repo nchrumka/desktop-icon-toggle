@@ -1,6 +1,7 @@
-# Packaged copies
+# Release packages (attach on GitHub Releases, do not commit)
 *.zip
-!DesktopIconToggle-1.4.6.zip
+*.exe
+dist/
 
 # Runtime state (do not commit a live desktop snapshot)
 snapshot.json
