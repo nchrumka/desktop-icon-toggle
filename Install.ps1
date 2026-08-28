@@ -59,12 +59,19 @@ if (Test-Path $icoHiddenSrc) {
 
 $exeSrc  = Join-Path $PSScriptRoot 'DesktopIconToggle.exe'
 $exeDest = Join-Path $installDir 'DesktopIconToggle.exe'
-if (-not (Test-Path $exeSrc)) {
-    throw "DesktopIconToggle.exe was not found next to Install.ps1. Use the zip from GitHub Releases (not a lone source checkout without the exe)."
+$builtExe = $false
+if (Test-Path $exeSrc) {
+    try {
+        Copy-Item -Path $exeSrc -Destination $exeDest -Force
+        $builtExe = Test-Path $exeDest
+        Write-Host "Copied DesktopIconToggle.exe (optional launcher)." -ForegroundColor DarkGreen
+    } catch {
+        Write-Host "Could not copy the exe (EDR may have blocked it). Shortcuts will use the scripts." -ForegroundColor DarkYellow
+        $builtExe = $false
+    }
+} else {
+    Write-Host "No exe in the zip; installing the scripts only." -ForegroundColor DarkYellow
 }
-Copy-Item -Path $exeSrc -Destination $exeDest -Force
-$builtExe = $true
-Write-Host "Copied DesktopIconToggle.exe (not compiled on this PC)." -ForegroundColor DarkGreen
 
 Get-ChildItem -LiteralPath $installDir -File -ErrorAction SilentlyContinue | ForEach-Object {
     try { Unblock-File -LiteralPath $_.FullName -ErrorAction Stop } catch {}
@@ -108,23 +115,14 @@ function New-AppShortcut([string]$path, [string]$target, [string]$arguments, [st
     $sc.WindowStyle = 7
     $sc.Description = $desc
     if (Test-Path $icoDest) { $sc.IconLocation = "$icoDest,0" }
-    elseif ($builtExe) { $sc.IconLocation = "$exeDest,0" }
     $sc.Save()
 }
 
-if ($builtExe) {
-    New-AppShortcut $startupLink $exeDest '-Tray' 'Desktop Icon Toggle - runs in the notification area'
-    $startTarget = $exeDest
-    $startArgs = ''
-    $restoreTarget = $exeDest
-    $restoreArgs = '-Reset'
-} else {
-    New-AppShortcut $startupLink "$env:SystemRoot\System32\wscript.exe" "`"$launchTray`"" 'Desktop Icon Toggle - runs in the notification area'
-    $startTarget = "$env:SystemRoot\System32\wscript.exe"
-    $startArgs = "`"$launchWindow`""
-    $restoreTarget = "$env:SystemRoot\System32\wscript.exe"
-    $restoreArgs = "`"$launchReset`""
-}
+New-AppShortcut $startupLink "$env:SystemRoot\System32\wscript.exe" "`"$launchTray`"" 'Desktop Icon Toggle - runs in the notification area'
+$startTarget = "$env:SystemRoot\System32\wscript.exe"
+$startArgs = "`"$launchWindow`""
+$restoreTarget = "$env:SystemRoot\System32\wscript.exe"
+$restoreArgs = "`"$launchReset`""
 Write-Host "Created Startup shortcut: $startupLink" -ForegroundColor DarkGreen
 
 $programsDir = [Environment]::GetFolderPath('Programs')
@@ -142,25 +140,20 @@ Write-Host "Created Start menu shortcut. Restore Desktop Icons remains on the de
 $uninstKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\DesktopIconToggle'
 New-Item -Path $uninstKey -Force | Out-Null
 Set-ItemProperty $uninstKey -Name DisplayName -Value 'Desktop Icon Toggle'
-Set-ItemProperty $uninstKey -Name DisplayVersion -Value '1.4.5'
+Set-ItemProperty $uninstKey -Name DisplayVersion -Value '1.4.6'
 Set-ItemProperty $uninstKey -Name Publisher -Value 'Desktop Icon Toggle'
 Set-ItemProperty $uninstKey -Name InstallLocation -Value $installDir
 Set-ItemProperty $uninstKey -Name NoModify -Value 1 -Type DWord
 Set-ItemProperty $uninstKey -Name NoRepair -Value 1 -Type DWord
-if ($builtExe) {
-    Set-ItemProperty $uninstKey -Name DisplayIcon -Value $exeDest
-    Set-ItemProperty $uninstKey -Name UninstallString -Value "`"$exeDest`" -Uninstall"
-} else {
+if (Test-Path $icoDest) {
     Set-ItemProperty $uninstKey -Name DisplayIcon -Value $icoDest
-    Set-ItemProperty $uninstKey -Name UninstallString -Value "powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File `"$(Join-Path $installDir 'Uninstall.ps1')`""
+} elseif ($builtExe) {
+    Set-ItemProperty $uninstKey -Name DisplayIcon -Value $exeDest
 }
+Set-ItemProperty $uninstKey -Name UninstallString -Value "powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File `"$(Join-Path $installDir 'Uninstall.ps1')`""
 Write-Host "Registered in Settings > Apps." -ForegroundColor DarkGreen
 
-if ($builtExe) {
-    Start-Process -FilePath $exeDest
-} else {
-    Start-Process -FilePath "$env:SystemRoot\System32\wscript.exe" -ArgumentList "`"$launchWindow`""
-}
+Start-Process -FilePath "$env:SystemRoot\System32\wscript.exe" -ArgumentList "`"$launchWindow`""
 Write-Host "Launched Desktop Icon Toggle." -ForegroundColor DarkGreen
 
 Write-Host ""

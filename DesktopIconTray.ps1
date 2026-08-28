@@ -127,7 +127,7 @@ $toastKey   = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Set
 $bagKey           = 'HKCU\Software\Microsoft\Windows\Shell\Bags\1\Desktop'
 $lookBackupPath   = Join-Path $root 'capture-wallpaper.bak'
 $lookSolidPath    = Join-Path $root 'capture-solid.bmp'
-$appVersion       = '1.4.5'
+$appVersion       = '1.4.6'
 $script:hideBtn   = $null
 $script:controlForm = $null
 $script:countdownLeft = 0
@@ -186,20 +186,13 @@ function Set-StartWithWindows([bool]$enabled) {
         if (Test-Path $path) { Remove-Item $path -Force }
         return
     }
-    $exe = Join-Path $PSScriptRoot 'DesktopIconToggle.exe'
+    $vbs = Join-Path $PSScriptRoot 'Launch-Tray.vbs'
     $wsh = New-Object -ComObject WScript.Shell
     $sc = $wsh.CreateShortcut($path)
-    if (Test-Path $exe) {
-        $sc.TargetPath = $exe
-        $sc.Arguments = '-Tray'
-        $sc.IconLocation = "$exe,0"
-    } else {
-        $vbs = Join-Path $PSScriptRoot 'Launch-Tray.vbs'
-        $sc.TargetPath = "$env:SystemRoot\System32\wscript.exe"
-        $sc.Arguments = "`"$vbs`""
-        $ico = Join-Path $PSScriptRoot 'App.ico'
-        if (Test-Path $ico) { $sc.IconLocation = "$ico,0" }
-    }
+    $sc.TargetPath = "$env:SystemRoot\System32\wscript.exe"
+    $sc.Arguments = "`"$vbs`""
+    $ico = Join-Path $PSScriptRoot 'App.ico'
+    if (Test-Path $ico) { $sc.IconLocation = "$ico,0" }
     $sc.WorkingDirectory = $PSScriptRoot
     $sc.WindowStyle = 7
     $sc.Description = 'Desktop Icon Toggle - runs in the notification area'

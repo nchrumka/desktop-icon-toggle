@@ -4,7 +4,7 @@ Windows tray app that hides desktop file icons for screenshots or recordings, th
 
 This is **not** a screenshot tool. Hide the icons, then use **Win+Shift+S** (Snipping Tool) or any recorder you already use.
 
-**Version 1.4.5** · Windows 10/11 · per-user, no admin for a normal desktop
+**Version 1.4.6** · Windows 10/11 · per-user, no admin for a normal desktop
 
 [User manual](USER-MANUAL.md) · [Install](#install) · [Uninstall](#uninstall)
 
@@ -22,17 +22,15 @@ This is **not** a screenshot tool. Hide the icons, then use **Win+Shift+S** (Sni
 
 Primary download: **[latest GitHub Release](https://github.com/nchrumka/desktop-icon-toggle/releases/latest)**.
 
-1. Download **[DesktopIconToggle-1.4.5.zip](https://github.com/nchrumka/desktop-icon-toggle/releases/latest)** (preferred). Fallback: [zip on the main branch](https://github.com/nchrumka/desktop-icon-toggle/raw/main/DesktopIconToggle-1.4.5.zip).
+1. Download **[DesktopIconToggle-1.4.6.zip](https://github.com/nchrumka/desktop-icon-toggle/releases/latest)** (preferred). Fallback: [zip on the main branch](https://github.com/nchrumka/desktop-icon-toggle/raw/main/DesktopIconToggle-1.4.6.zip).
 2. Unzip the folder so `Install.bat` is next to the other files, not inside the zip.
 3. Double-click **Install.bat** (recommended: Start menu, tray at logon, uninstall entry).
 4. If Windows shows **Windows protected your PC**, click **More info**, then **Run anyway**.
 5. A Desktop Icon Toggle window opens.
 
-Zip + **Install.bat** is the recommended path for Start menu and Settings > Apps. Install **copies** the shipped exe; it does not compile or self-sign on your PC.
+Zip + **Install.bat** is the recommended path. Shortcuts launch the PowerShell scripts (not the exe), so CrowdStrike quarantining `DesktopIconToggle.exe` does not break Start menu or Startup.
 
-The exe still unpacks scripts into `%LOCALAPPDATA%\DesktopIconToggle` if you run it alone (no `.ps1` next to it). Prefer the zip.
-
-On a managed PC (CrowdStrike, Defender, etc.), ask IT to allow `%LOCALAPPDATA%\DesktopIconToggle\`. Unsigned GitHub downloads can still be blocked.
+The exe is optional. Prefer the zip. On a managed PC, ask IT to allow `%LOCALAPPDATA%\DesktopIconToggle\` if scripts are blocked too.
 
 Install adds:
 

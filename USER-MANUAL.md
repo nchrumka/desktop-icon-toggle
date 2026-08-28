@@ -1,6 +1,6 @@
 # Desktop Icon Toggle — user manual
 
-Version 1.4.5
+Version 1.4.6
 
 Hide desktop icons for a clean screenshot or recording, then bring everything back. The app does not take screenshots. After icons are hidden, use **Win+Shift+S** or your usual recorder.
 
@@ -8,15 +8,15 @@ Hide desktop icons for a clean screenshot or recording, then bring everything ba
 
 Primary download: **[latest GitHub Release](https://github.com/nchrumka/desktop-icon-toggle/releases/latest)**. Prefer the zip and **Install.bat** so Start menu, tray-at-logon, and uninstall are registered.
 
-1. Download **[DesktopIconToggle-1.4.5.zip](https://github.com/nchrumka/desktop-icon-toggle/releases/latest)**. Fallback: [zip on the main branch](https://github.com/nchrumka/desktop-icon-toggle/raw/main/DesktopIconToggle-1.4.5.zip).
+1. Download **[DesktopIconToggle-1.4.6.zip](https://github.com/nchrumka/desktop-icon-toggle/releases/latest)**. Fallback: [zip on the main branch](https://github.com/nchrumka/desktop-icon-toggle/raw/main/DesktopIconToggle-1.4.6.zip).
 2. Unzip the folder so `Install.bat` sits next to the scripts, not inside the zip.
 3. Double-click **Install.bat**.
-4. If SmartScreen says **Windows protected your PC**, choose **More info**, then **Run anyway**. The launcher is unsigned; SmartScreen may still warn the first time.
+4. If SmartScreen says **Windows protected your PC**, choose **More info**, then **Run anyway**.
 5. A **Desktop Icon Toggle** window should open.
 
-Install copies the shipped exe. It does **not** compile with `csc.exe` or create a self-signed certificate on your PC. If CrowdStrike or another EDR quarantines the folder, ask IT to allow `%LOCALAPPDATA%\DesktopIconToggle\`.
+Install copies the scripts and points Start menu / Startup / Restore Desktop Icons at those scripts. It does **not** compile with `csc.exe`. The exe is optional; if CrowdStrike quarantines `DesktopIconToggle.exe`, the shortcuts still work.
 
-The exe unpacks scripts into `%LOCALAPPDATA%\DesktopIconToggle` when `DesktopIconTray.ps1` is not next to it. Prefer the zip and Install.bat.
+If EDR quarantines the whole folder, ask IT to allow `%LOCALAPPDATA%\DesktopIconToggle\`.
 
 You do **not** need administrator rights for your own Desktop (including a OneDrive Desktop). The first time a **Public Desktop** icon cannot be hidden, Windows may ask for elevation once. After that, a scheduled task named `DesktopIconToggleHelper` can finish those items without another prompt.
 
@@ -158,7 +158,7 @@ If a shortcut is already used by another app, Settings tells you. Pick a differe
 More info > Run anyway. Expected for an unsigned GitHub download.
 
 **CrowdStrike / EDR quarantine**  
-Ask IT to allow `%LOCALAPPDATA%\DesktopIconToggle\`. Install copies a prebuilt exe; it does not compile or self-sign on your PC.
+If Windows cannot find `DesktopIconToggle.exe`, CrowdStrike likely quarantined the launcher. 1.4.6 shortcuts use the scripts instead, so Start menu and Startup still work. Ask IT to allow `%LOCALAPPDATA%\DesktopIconToggle\` if the scripts are blocked too.
 
 **Already running**  
 Only one copy can run. Use the tray, the hotkey, or Start menu > Desktop Icon Toggle.
@@ -180,4 +180,4 @@ Another app owns that combination. Change it on the Settings tab.
 
 ## 12. Command line (optional)
 
-Most people should use the tray. From the install folder, `DesktopIconManager.ps1` supports `-Hide`, `-Restore`, `-Reset`, and `-ClearProfiles`. `DesktopIconToggle.exe -Reset` is what the desktop **Restore Desktop Icons** shortcut runs.
+Most people should use the tray. From the install folder, `DesktopIconManager.ps1` supports `-Hide`, `-Restore`, `-Reset`, and `-ClearProfiles`. The desktop **Restore Desktop Icons** shortcut runs `DesktopIconManager.ps1 -Reset`.
