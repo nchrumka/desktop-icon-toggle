@@ -154,7 +154,10 @@ If a shortcut is already used by another app, Settings tells you. Pick a differe
 ## 11. Troubleshooting
 
 **SmartScreen warning**  
-More info > Run anyway. This is expected for a locally signed installer.
+More info > Run anyway. Expected for an unsigned GitHub download.
+
+**CrowdStrike / EDR quarantine**  
+Ask IT to allow `%LOCALAPPDATA%\DesktopIconToggle\`. Install copies a prebuilt exe; it does not compile or self-sign on your PC.
 
 **Already running**  
 Only one copy can run. Use the tray, the hotkey, or Start menu > Desktop Icon Toggle.
