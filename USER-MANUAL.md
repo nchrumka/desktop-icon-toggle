@@ -1,6 +1,6 @@
 # Desktop Icon Toggle — user manual
 
-Version 1.4.3
+Version 1.4.4
 
 Hide desktop icons for a clean screenshot or recording, then bring everything back. The app does not take screenshots. After icons are hidden, use **Win+Shift+S** or your usual recorder.
 
@@ -8,7 +8,7 @@ Hide desktop icons for a clean screenshot or recording, then bring everything ba
 
 Primary download: **[latest GitHub Release](https://github.com/nchrumka/desktop-icon-toggle/releases/latest)**. Prefer the zip and **Install.bat** so Start menu, tray-at-logon, and uninstall are registered.
 
-1. Download **[DesktopIconToggle-1.4.3.zip](https://github.com/nchrumka/desktop-icon-toggle/releases/latest)**. Fallback: [zip on the main branch](https://github.com/nchrumka/desktop-icon-toggle/raw/main/DesktopIconToggle-1.4.3.zip).
+1. Download **[DesktopIconToggle-1.4.4.zip](https://github.com/nchrumka/desktop-icon-toggle/releases/latest)**. Fallback: [zip on the main branch](https://github.com/nchrumka/desktop-icon-toggle/raw/main/DesktopIconToggle-1.4.4.zip).
 2. Unzip the folder so `Install.bat` sits next to the scripts, not inside the zip.
 3. Double-click **Install.bat**.
 4. If SmartScreen says **Windows protected your PC**, choose **More info**, then **Run anyway**. The launcher is unsigned; SmartScreen may still warn the first time.

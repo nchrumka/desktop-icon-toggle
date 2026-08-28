@@ -4,7 +4,7 @@ Windows tray app that hides desktop file icons for screenshots or recordings, th
 
 This is **not** a screenshot tool. Hide the icons, then use **Win+Shift+S** (Snipping Tool) or any recorder you already use.
 
-**Version 1.4.3** · Windows 10/11 · per-user, no admin for a normal desktop
+**Version 1.4.4** · Windows 10/11 · per-user, no admin for a normal desktop
 
 [User manual](USER-MANUAL.md) · [Install](#install) · [Uninstall](#uninstall)
 
@@ -21,7 +21,7 @@ This is **not** a screenshot tool. Hide the icons, then use **Win+Shift+S** (Sni
 
 Primary download: **[latest GitHub Release](https://github.com/nchrumka/desktop-icon-toggle/releases/latest)**.
 
-1. Download **[DesktopIconToggle-1.4.3.zip](https://github.com/nchrumka/desktop-icon-toggle/releases/latest)** (preferred). Fallback: [zip on the main branch](https://github.com/nchrumka/desktop-icon-toggle/raw/main/DesktopIconToggle-1.4.3.zip).
+1. Download **[DesktopIconToggle-1.4.4.zip](https://github.com/nchrumka/desktop-icon-toggle/releases/latest)** (preferred). Fallback: [zip on the main branch](https://github.com/nchrumka/desktop-icon-toggle/raw/main/DesktopIconToggle-1.4.4.zip).
 2. Unzip the folder so `Install.bat` is next to the other files, not inside the zip.
 3. Double-click **Install.bat** (recommended: Start menu, tray at logon, uninstall entry).
 4. If Windows shows **Windows protected your PC**, click **More info**, then **Run anyway**.
@@ -61,7 +61,7 @@ Settings > Apps > **Desktop Icon Toggle**, or **Uninstall.bat**. Hidden icons an
 | `Uninstall.bat` / `Uninstall.ps1` | Restore desktop, then remove the app |
 | `DesktopIconTray.ps1` | Window, tray, hotkeys, Look tab |
 | `DesktopIconManager.ps1` | CLI hide/restore/reset and elevated Public Desktop helper |
-| `DesktopIconToggle.exe` | Prebuilt launcher (1.4.3) |
+| `DesktopIconToggle.exe` | Prebuilt launcher (1.4.4) |
 | `Build-Launcher.ps1` | Rebuild the exe for a new zip (not run by Install.bat) |
 | `Launcher.cs` | Source for the launcher |
 | `USER-MANUAL.md` | Full how-to |

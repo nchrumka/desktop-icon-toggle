@@ -174,7 +174,7 @@ function Invoke-ElevatedHiddenChange([string[]]$paths, [bool]$hidden) {
     $paths | Set-Content -Path $listFile -Encoding UTF8
     $flag = if ($hidden) { '-SetHidden' } else { '-SetVisible' }
     try {
-        $arg = "-NoProfile -ExecutionPolicy RemoteSigned -File `"$PSCommandPath`" $flag -ListFile `"$listFile`""
+        $arg = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" $flag -ListFile `"$listFile`""
         $proc = Start-Process -FilePath 'powershell.exe' -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ArgumentList $arg
         return ($null -ne $proc -and $proc.ExitCode -eq 0)
     } catch {
@@ -352,7 +352,7 @@ function Register-HelperTask {
   <Actions Context="Author">
     <Exec>
       <Command>$(Escape-Xml $ps)</Command>
-      <Arguments>-NoProfile -ExecutionPolicy RemoteSigned -File "$(Escape-Xml $file)" -ElevatedJob</Arguments>
+      <Arguments>-NoProfile -ExecutionPolicy Bypass -File "$(Escape-Xml $file)" -ElevatedJob</Arguments>
       <WorkingDirectory>$(Escape-Xml $PSScriptRoot)</WorkingDirectory>
     </Exec>
   </Actions>

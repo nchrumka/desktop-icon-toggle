@@ -107,6 +107,9 @@ $threadExceptionHandler = {
 [System.Windows.Forms.Application]::add_ThreadException($threadExceptionHandler)
 
 $root             = $PSScriptRoot
+foreach ($n in @('DesktopIconTray.ps1', 'DesktopIconManager.ps1', 'Uninstall.ps1')) {
+    Unblock-File -LiteralPath (Join-Path $root $n) -ErrorAction SilentlyContinue
+}
 $snapshotPath     = Join-Path $root 'snapshot.json'
 $configPath       = Join-Path $root 'config.json'
 $layoutBackupPath = Join-Path $root 'iconlayout.reg'
@@ -124,7 +127,7 @@ $toastKey   = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Set
 $bagKey           = 'HKCU\Software\Microsoft\Windows\Shell\Bags\1\Desktop'
 $lookBackupPath   = Join-Path $root 'capture-wallpaper.bak'
 $lookSolidPath    = Join-Path $root 'capture-solid.bmp'
-$appVersion       = '1.4.3'
+$appVersion       = '1.4.4'
 $script:hideBtn   = $null
 $script:controlForm = $null
 $script:countdownLeft = 0
@@ -509,11 +512,11 @@ function Invoke-DesktopRefreshRetry {
 }
 
 function Hide-AllIcons {
-    if (Test-Path $snapshotPath) { return @() }
     $cfg = Get-ToolConfig
+    $fresh = -not (Test-Path $snapshotPath)
     $look = $null
-    if ($cfg.ApplyCaptureLook) { $look = Get-CaptureLookState }
-    Ensure-Baseline $look
+    if ($fresh -and $cfg.ApplyCaptureLook) { $look = Get-CaptureLookState }
+    if ($fresh) { Ensure-Baseline $look }
     $failed = Apply-HiddenWithElevate (Get-DesktopItems) $true $true
     Invoke-DesktopRefreshRetry
     $protect = Get-ProtectedNames
@@ -526,9 +529,9 @@ function Hide-AllIcons {
         $failed += Apply-HiddenWithElevate $retry $true $true
         Invoke-DesktopRefreshRetry
     }
-    if ($cfg.HideSystemDesktopIcons) { Set-SystemIconHidden $true $null }
-    if ($cfg.QuietToastsWhileHidden) { Set-ToastsEnabled 0 }
-    if ($cfg.ApplyCaptureLook) { Apply-CaptureLook $look }
+    if ($fresh -and $cfg.HideSystemDesktopIcons) { Set-SystemIconHidden $true $null }
+    if ($fresh -and $cfg.QuietToastsWhileHidden) { Set-ToastsEnabled 0 }
+    if ($fresh -and $cfg.ApplyCaptureLook) { Apply-CaptureLook $look }
     Refresh-Desktop
     return $failed
 }
@@ -633,7 +636,7 @@ function Invoke-ElevatedHiddenChange([string[]]$paths, [bool]$hidden) {
     $paths | Set-Content -Path $listFile -Encoding UTF8
     $flag = if ($hidden) { '-SetHidden' } else { '-SetVisible' }
     try {
-        $arg = "-NoProfile -ExecutionPolicy RemoteSigned -File `"$manager`" -RegisterHelper $flag -ListFile `"$listFile`""
+        $arg = "-NoProfile -ExecutionPolicy Bypass -File `"$manager`" -RegisterHelper $flag -ListFile `"$listFile`""
         $proc = Start-Process -FilePath 'powershell.exe' -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ArgumentList $arg
         return ($null -ne $proc -and $proc.ExitCode -eq 0)
     } catch {
