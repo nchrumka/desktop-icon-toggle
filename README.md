@@ -20,9 +20,11 @@ This is **not** a screenshot tool. Hide the icons, then use **Win+Shift+S** (Sni
 ## Install
 
 1. Clone or unzip this folder.
-2. Double-click **Install.bat**.
+2. Double-click **Install.bat** (recommended: Start menu, tray at logon, uninstall entry).
 3. If Windows shows **Windows protected your PC**, click **More info**, then **Run anyway**.
 4. A Desktop Icon Toggle window opens.
+
+You can also run **DesktopIconToggle.exe** from this folder after a clone; it still needs the `.ps1` files next to it. Install.bat is what registers shortcuts and Settings > Apps.
 
 Install adds:
 
@@ -42,7 +44,7 @@ Settings > Apps > **Desktop Icon Toggle**, or **Uninstall.bat**. Hidden icons an
 
 - Windows 10 or 11
 - PowerShell 5.1 (included with Windows)
-- .NET Framework 4.x (used only to build the small launcher at install time)
+- .NET Framework 4.x (used to build the launcher if you run Install.bat without the prebuilt exe)
 
 ## Repository layout
 
@@ -52,7 +54,8 @@ Settings > Apps > **Desktop Icon Toggle**, or **Uninstall.bat**. Hidden icons an
 | `Uninstall.bat` / `Uninstall.ps1` | Restore desktop, then remove the app |
 | `DesktopIconTray.ps1` | Window, tray, hotkeys, Look tab |
 | `DesktopIconManager.ps1` | CLI hide/restore/reset and elevated Public Desktop helper |
-| `Launcher.cs` | `DesktopIconToggle.exe` (built at install) |
+| `DesktopIconToggle.exe` | Prebuilt launcher (1.4.1) |
+| `Launcher.cs` | Source for the launcher |
 | `USER-MANUAL.md` | Full how-to |
 
 ## License

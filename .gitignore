@@ -12,6 +12,3 @@ elevate-result.json
 error.log
 install-error.log
 Profiles/
-
-# Built at install time
-DesktopIconToggle.exe
