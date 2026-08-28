@@ -19,7 +19,7 @@ This is **not** a screenshot tool. Hide the icons, then use **Win+Shift+S** (Sni
 
 ## Install
 
-1. Download **[DesktopIconToggle-1.4.1.zip](https://github.com/nchrumka/desktop-icon-toggle/raw/main/DesktopIconToggle-1.4.1.zip)** from GitHub (this repo's share pack).
+1. Download **[DesktopIconToggle-1.4.1.zip](https://github.com/nchrumka/desktop-icon-toggle/releases/latest)** from the [latest GitHub Release](https://github.com/nchrumka/desktop-icon-toggle/releases/latest). Fallback: [zip on the main branch](https://github.com/nchrumka/desktop-icon-toggle/raw/main/DesktopIconToggle-1.4.1.zip).
 2. Unzip the folder so `Install.bat` is next to the other files, not inside the zip.
 3. Double-click **Install.bat** (recommended: Start menu, tray at logon, uninstall entry).
 4. If Windows shows **Windows protected your PC**, click **More info**, then **Run anyway**.
